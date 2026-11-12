@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "go_reference_version": "go1.26.0",
+  "libraw": {
+    "version": "0.21.4",
+    "commit": "9646d776c7c61976080a8f2be67928df0750493e",
+    "url": "https://www.libraw.org/data/LibRaw-0.21.4.tar.gz",
+    "sha256": "6be43f19397e43214ff56aab056bf3ff4925ca14012ce5a1538a172406a09e63",
+    "archive": "LibRaw-0.21.4.tar.gz",
+    "directory": "LibRaw-0.21.4",
+    "configure": [
+      "--disable-shared",
+      "--enable-static",
+      "--disable-openmp",
+      "--disable-jpeg",
+      "--disable-jasper",
+      "--disable-zlib",
+      "--disable-lcms",
+      "--disable-examples",
+      "CXXFLAGS=-O2",
+      "CFLAGS=-O2"
+    ],
+    "decoder_source_sha256": "a31dbd28ddbca7270351640efd81d8189d34ac47de66e484415394e92034f905"
+  },
+  "exiftool": {
+    "version": "13.40",
+    "commit": "e2a8542f9c900eae70cb016f0ed410c1bfd4c1ac",
+    "url": "https://codeload.github.com/exiftool/exiftool/tar.gz/e2a8542f9c900eae70cb016f0ed410c1bfd4c1ac",
+    "sha256": "5df2576b01e6f3b0eb15d496b7754a1ee5924f94fa2054eb567a5772f3fe7f96",
+    "archive": "exiftool-13.40.tar.gz",
+    "directory": "exiftool-e2a8542f9c900eae70cb016f0ed410c1bfd4c1ac"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "header_hex": "4949524f08000000",
+  "byte_order": "little-endian",
+  "ifd0_offset": 8,
+  "ifd0_entries": 21,
+  "width": 3720,
+  "height": 2800,
+  "bits_per_sample": 16,
+  "compression": 1,
+  "photometric": 1,
+  "rows_per_strip": 2800,
+  "strip_offsets": [
+    655360
+  ],
+  "strip_byte_counts": [
+    10180944
+  ],
+  "strips_contiguous": true,
+  "payload_bytes": 10180944,
+  "payload_prefix_hex": "000000000100006006c800014e693257",
+  "exif_ifd_offset": 266,
+  "maker_note_offset": 3328,
+  "maker_note_bytes": 652032,
+  "maker_note_header_hex": "4f4c594d5055530049490300"
+}

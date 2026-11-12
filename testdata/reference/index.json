@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "fixtures": {
+    "olympus-e-1-1800": {
+      "input_sha256": "042286653fbae5b085bef4a4e626145385ea6e82e817f166b4904abcef64457c",
+      "samples_u16le_sha256": "48a755038aa94760a34f2e6dcededd882224a332ce6de5bd813b0b74fa7e72f3",
+      "sample_count": 5158784,
+      "artifacts": {
+        "olympus-e-1-1800.json": {
+          "sha256": "52b23492a1a25161c28728892518cdb202588b4727054ba13351d3da0a8bc7aa",
+          "bytes": 42748
+        },
+        "olympus-e-1-1800.layout.json": {
+          "sha256": "741aac973aab7b25a17da49b3e38278ceb3aaabc0a148c0c4de030f59e157633",
+          "bytes": 947
+        },
+        "olympus-e-1-1800.u16le.gz": {
+          "sha256": "b6cfbe004cf4d3c6a9965170f3eb877f9a550b1359f802f73b444e4f5662d3d6",
+          "bytes": 7469809
+        }
+      },
+      "word_mismatch_count": 0,
+      "storage_nonzero_low4": 0
+    },
+    "olympus-e-400-2151": {
+      "input_sha256": "1354e0ac98ea90820227650031d8215637a2aaabd15de995c5a1e00b1986261b",
+      "samples_u16le_sha256": "2e675bd36bcfbe5de7d9afa1cc4fc8cd2aeb74d9f96f38ca30010918031fe2e3",
+      "sample_count": 10701120,
+      "artifacts": {
+        "olympus-e-400-2151.json": {
+          "sha256": "e68907e69ad49dacd3986678957d546c20f9e145218776d82c6846b500c0eb2b",
+          "bytes": 42765
+        },
+        "olympus-e-400-2151.layout.json": {
+          "sha256": "5e43caba4e08a39b925e75547436c44d3241ea715688cea108d146d93b6f9330",
+          "bytes": 2820
+        },
+        "olympus-e-400-2151.u16le.gz": {
+          "sha256": "cc5b53c4a58839ba244dea377eb9dd232763ee91d8e7ec3b212ff2a9ff5bc74b",
+          "bytes": 15162644
+        }
+      },
+      "word_mismatch_count": 0,
+      "storage_nonzero_low4": 793
+    },
+    "olympus-e-410-1173": {
+      "input_sha256": "b545f3d831275d7febb1d02bfa22b03078eeff27fcb4c5be6806e89857bb1ed7",
+      "samples_u16le_sha256": "6fd3d64305d4be04759d9ba0599a7ae1d8b07a287171c4f58df837580243f3fd",
+      "sample_count": 10416000,
+      "artifacts": {
+        "olympus-e-410-1173.json": {
+          "sha256": "916b92813c6338b449c7444cd88733437fb1913db10284122c37a88b30f2cccb",
+          "bytes": 42077
+        },
+        "olympus-e-410-1173.layout.json": {
+          "sha256": "2c8e8b6f43ceb13798c782af5a3823815aad8d29e4edcc6ed856cd9fa6ce4293",
+          "bytes": 576
+        },
+        "olympus-e-410-1173.u16le.gz": {
+          "sha256": "0328c3096bba3b47e58884ebd986831015ca760596b1711a8823dfd73a84b3fa",
+          "bytes": 14956496
+        }
+      }
+    },
+    "olympus-e-510-5449": {
+      "input_sha256": "efab3d91a4f52ce65a428c15af5a54a170ef5961fb7765265c432faf19d6744c",
+      "samples_u16le_sha256": "04bc6a9ba70a6c3dd6be307c593ed95384db0f42cee882bf55768038b6863d55",
+      "sample_count": 10416000,
+      "artifacts": {
+        "olympus-e-510-5449.json": {
+          "sha256": "8f581545ce955118f33909a6cbe577b4f6fb3f73dd7a5f42689c503c94bbf2a5",
+          "bytes": 42079
+        },
+        "olympus-e-510-5449.layout.json": {
+          "sha256": "c1a7e905548c14a11c29282fd154a8a6fc08fba7a36fd362efc8b741f7b54a27",
+          "bytes": 578
+        },
+        "olympus-e-510-5449.u16le.gz": {
+          "sha256": "b7d6130843d28f7721d384ea246b1dc06c2d5768f6f7e2688a9e4506a5861353",
+          "bytes": 14731112
+        }
+      }
+    }
+  }
+}

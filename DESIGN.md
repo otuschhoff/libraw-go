@@ -1,6 +1,8 @@
 # Pure-Go Olympus ORF Decoder: Design and Execution Specification
 
-Status: proposed design; no decoder has been implemented.
+Status: implementation specification; Phase 0 evidence and reference tooling
+are recorded in [the Phase 0 report](docs/phase0.md). No production decoder
+has been implemented.
 
 ## 1. Objective
 
