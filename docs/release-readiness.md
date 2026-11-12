@@ -1,5 +1,11 @@
 # Phase 7: usable engineering milestone, release blocked
 
+**v0.1.0 release scope:** the initial tagged release covers the implemented,
+evidence-scoped library and commands, with E-M5/S0036 as the active target.
+It is not the historical four-camera certified M1+M2 release described below
+and does not waive its unmet certification requirements. See the
+[changelog](../CHANGELOG.md) for the release summary.
+
 **Historical four-camera milestone:** current work is now restricted by the
 owner to [E-M5/S0036](em5.md). The fixture gaps and certification command in
 this report describe the earlier public regression corpus, not a requirement

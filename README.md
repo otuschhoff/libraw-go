@@ -2,6 +2,18 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
+## Version 0.1.0
+
+The initial release is tagged `v0.1.0`. See the [changelog](CHANGELOG.md)
+for its features, scope and limitations. Install the Go module with:
+
+```sh
+go get github.com/otuschhoff/libraw-go@v0.1.0
+```
+
+This is an early, evidence-scoped release, not camera-wide certification.
+The API may change before v1.0.0.
+
 **Active scope: Olympus OM-D E-M5 / S0036 only**, matching the local personal
 ORFs: 12-bit legacy predictive RAW, 4640x3472 sensor, 4608x3456 active crop.
 Metadata, original previews, exact RAW decoding and default calibrated
@@ -17,8 +29,9 @@ goal. Exact sensor-code decoding is available for the evidenced
 `olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
 metadata, embedded JPEGs, `orfinfo` and `orfexport`. Basic independent sRGB rendering is
 implemented for explicitly calibrated Bayer images. This is a
-layout-scoped source milestone, not camera/mode certification or a tagged
-release. See the [Phase 7 readiness and release gate](docs/release-readiness.md).**
+layout-scoped source milestone, not camera/mode certification. The v0.1.0
+release does not waive that historical certification gate. See the
+[Phase 7 readiness and release gate](docs/release-readiness.md).**
 
 ## Project decisions
 
