@@ -69,7 +69,7 @@ type Reader struct {
 	source     *bounded.Reader
 	order      binary.ByteOrder
 	maxEntries uint64
-	remaining  uint64
+	remaining  *uint64
 }
 
 // New accepts only explicit little/big endian order and positive budgets.
@@ -79,22 +79,45 @@ func New(source *bounded.Reader, order binary.ByteOrder, maxEntries, budget uint
 	if source == nil || (order != binary.LittleEndian && order != binary.BigEndian) || maxEntries == 0 || budget == 0 {
 		return nil, &fault.Error{Op: "TIFF options", Kind: fault.Options, Detail: "missing source, byte order, or positive budgets"}
 	}
-	return &Reader{source: source, order: order, maxEntries: maxEntries, remaining: budget}, nil
+	return &Reader{source: source, order: order, maxEntries: maxEntries, remaining: &budget}, nil
 }
 
 func (r *Reader) charge(bytes uint64) error {
-	if bytes > r.remaining {
+	if bytes > *r.remaining {
 		return &fault.Error{Op: "TIFF metadata", Kind: fault.Limit, Detail: "aggregate metadata budget exceeded"}
 	}
-	r.remaining -= bytes
+	*r.remaining -= bytes
 	return nil
+}
+
+// Reserve accounts for parser-owned metadata outside IFD entry storage.
+func (r *Reader) Reserve(bytes uint64) error { return r.charge(bytes) }
+
+func (r *Reader) Remaining() uint64 { return *r.remaining }
+
+// WithOrder shares the operation's aggregate budget across endian domains.
+func (r *Reader) WithOrder(order binary.ByteOrder) (*Reader, error) {
+	if order != binary.LittleEndian && order != binary.BigEndian {
+		return nil, &fault.Error{Op: "TIFF byte order", Kind: fault.Options}
+	}
+	copy := *r
+	copy.order = order
+	return &copy, nil
 }
 
 // ReadIFD reads one classic directory. offset and base are absolute file byte
 // positions; out-of-line values and Next are relative to base. It intentionally
-// does not follow any pointers. MakerNote variants lacking classic framing
-// require separate policy in Phase 2, not a relaxed parser here.
+// does not follow pointers. MakerNote framing requires explicit ReadDirectory
+// policy rather than relaxing this classic entry point.
 func (r *Reader) ReadIFD(offset, base int64) (*IFD, error) {
+	return r.ReadDirectory(offset, base, true, nil)
+}
+
+// ReadDirectory supports explicitly framed MakerNote directories without a
+// next-IFD pointer. selectTag controls materialization only: every entry's type,
+// count, and extent is still checked. Unselected entries retain Offset/Count,
+// but Data is nil and typed access is invalid.
+func (r *Reader) ReadDirectory(offset, base int64, withNext bool, selectTag func(uint16) bool) (*IFD, error) {
 	if _, err := r.source.Offset(base, 0); err != nil {
 		return nil, err
 	}
@@ -106,7 +129,10 @@ func (r *Reader) ReadIFD(offset, base int64) (*IFD, error) {
 	if count > r.maxEntries {
 		return nil, &fault.Error{Op: "TIFF IFD", Kind: fault.Limit, IFD: &offset, Detail: "entry count exceeds quota"}
 	}
-	tableBytes := count*12 + 4 // count is a uint16, so these operations cannot overflow.
+	tableBytes := count * 12 // count is a uint16, so these operations cannot overflow.
+	if withNext {
+		tableBytes += 4
+	}
 	tableOffset, err := r.source.Offset(offset, 2)
 	if err != nil {
 		return nil, err
@@ -126,16 +152,21 @@ func (r *Reader) ReadIFD(offset, base int64) (*IFD, error) {
 		tag := r.order.Uint16(record)
 		fieldType := Type(r.order.Uint16(record[2:]))
 		n := r.order.Uint32(record[4:])
-		entry, err := r.readEntry(tag, fieldType, n, record[8:12], tableOffset+int64(i*12)+8, base)
+		selected := selectTag == nil || selectTag(tag)
+		entry, err := r.readEntry(tag, fieldType, n, record[8:12], tableOffset+int64(i*12)+8, base, selected)
 		if err != nil {
 			return nil, &fault.Error{Op: "TIFF entry", Cause: err, IFD: &offset, Tag: &tag}
 		}
 		entries[i] = entry
 	}
-	return &IFD{Offset: offset, Base: base, Entries: entries, Next: r.order.Uint32(table[count*12:])}, nil
+	var next uint32
+	if withNext {
+		next = r.order.Uint32(table[count*12:])
+	}
+	return &IFD{Offset: offset, Base: base, Entries: entries, Next: next}, nil
 }
 
-func (r *Reader) readEntry(tag uint16, typ Type, count uint32, inline []byte, inlineOffset, base int64) (Entry, error) {
+func (r *Reader) readEntry(tag uint16, typ Type, count uint32, inline []byte, inlineOffset, base int64, selected bool) (Entry, error) {
 	entry := Entry{Tag: tag, Type: typ, Count: count, order: r.order}
 	size, err := typ.Size()
 	if err != nil {
@@ -148,18 +179,29 @@ func (r *Reader) readEntry(tag uint16, typ Type, count uint32, inline []byte, in
 	if count == 0 {
 		return Entry{}, &fault.Error{Op: "TIFF value", Kind: fault.Corrupt, Detail: "zero field count"}
 	}
-	if err := r.charge(length); err != nil {
-		return Entry{}, err
+	if selected {
+		if err := r.charge(length); err != nil {
+			return Entry{}, err
+		}
 	}
 	if length <= 4 {
 		entry.Offset = inlineOffset
-		entry.Data = make([]byte, int(length))
-		copy(entry.Data, inline)
 	} else {
 		entry.Offset, err = r.source.Offset(base, uint64(r.order.Uint32(inline)))
 		if err != nil {
 			return Entry{}, err
 		}
+	}
+	if err := r.source.Extent(entry.Offset, length); err != nil {
+		return Entry{}, err
+	}
+	if !selected {
+		return entry, nil
+	}
+	if length <= 4 {
+		entry.Data = make([]byte, int(length))
+		copy(entry.Data, inline)
+	} else {
 		entry.Data, err = r.source.Bytes(entry.Offset, length, length)
 		if err != nil {
 			return Entry{}, err

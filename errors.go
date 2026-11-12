@@ -14,6 +14,7 @@ var (
 	ErrLimitExceeded          = fault.Limit
 	ErrCalibrationUnavailable = fault.Calibration
 	ErrInvalidOptions         = fault.Options
+	ErrNoPreview              = fault.NoPreview
 )
 
 // Error identifies an operation, classification, cause, and optional location.

@@ -1,10 +1,11 @@
 # libraw-go
 
-A planned pure-Go Olympus/OM System ORF subset of LibRaw.
+A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 1 complete: Go module, public data/error/option
-contracts, and bounded binary/TIFF primitives. There is no production ORF
-opener, decoder, renderer, or supported-camera claim yet.**
+**Current status: Phase 2 complete: bounded ORF opening, metadata, honest
+capability reports, original embedded JPEG extraction, and `orfinfo`.
+Raw pixel decoding and rendering are not implemented. Identifying a storage
+layout is not a supported-camera or raw-decoding claim.**
 
 ## Project decisions
 
@@ -22,6 +23,157 @@ It depends only on the standard library and builds with `CGO_ENABLED=0`.
 Native tools below remain development-only, with no native or
 external-process production dependency.
 
+## Phase 2: ORF metadata and embedded previews
+
+```go
+input, err := os.Open(path)
+if err != nil {
+    return err
+}
+defer input.Close()
+info, err := input.Stat()
+if err != nil {
+    return err
+}
+file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+if err != nil {
+    return err
+}
+metadata := file.Metadata() // defensive snapshot; geometry is sensor-native
+capabilities := file.Capabilities()
+_ = metadata
+if capabilities.Preview.Available {
+    preview, err := file.Preview(context.Background())
+    if err != nil {
+        return err
+    }
+    _ = preview.JPEG // original bytes, not a sensor decode or a re-encode
+}
+```
+
+`Open` borrows the caller-owned, unchanged `io.ReaderAt`. It never closes it,
+buffers the whole file, allocates a raw plane, or decodes JPEG pixels.
+Concurrent operations require concurrent-read support from that reader.
+Every metadata/preview result is independently caller-owned.
+
+The implemented parsing surface is deliberately narrow:
+
+- The evidenced little-endian `IIRO` ORF header. `IIRS` and `MMOR` are recognized
+  as unsupported variants; standard TIFF and unrelated bytes are not ORF.
+- Classic image IFD/next-IFD/SubIFD traversal, EXIF, and the measured old `OLYMP`
+  and new little-endian `OLYMPUS` MakerNotes. Offset bases are explicit.
+- Bounded compatibility for old Olympus subdirectory lengths omitting exactly
+  their two-byte count, with a diagnostic. Referenced metadata is file-bounded,
+  not incorrectly confined to the MakerNote tag's declared blob.
+- Original make/model/software strings, normalized camera identity, original
+  EXIF orientation, sensor/active geometry, CFA at raw origin, valid bit depth,
+  exposure, aperture, ISO, focal length, capture-mode fields, black and WB.
+- Immutable plans for the evidenced E-1/E-400 word layout and E-410/E-510
+  legacy predictive layout, requiring matching structural, identity, bit-depth,
+  CFA and mode evidence. Compressed prefix evidence is checked separately.
+  `Metadata.Layout` records the selector's provenance; it does not enable RAW.
+- Aggregate directory/depth/entry/metadata quotas and independent payload,
+  preview, dimension, platform-index, and working-buffer checks. Cycles,
+  aliases, duplicate tags, ambiguous sensor IFDs, overlapping payloads/tables,
+  and conflicting known calibration fail explicitly.
+
+Safely parsed unsupported models, modes, tiled organizations, reordered/gapped
+strips, or newer codecs can still expose metadata/previews. No camera-name-only,
+file-size-only, or nominal-bit-depth-only decoder guess is made. Logical strip
+order is preserved even when that organization cannot select an initial plan.
+`Capabilities.Raw.Available` and `.Render.Available` are always false in this
+phase; `DecodeRaw` returns `ErrUnsupported` and never substitutes a JPEG.
+
+White level, firmware, and camera-to-XYZ transforms remain explicitly unavailable
+unless established by verified metadata; native reference camera-table values
+are not relabeled as file calibration. Missing white/color calibration does not
+prevent metadata or preview extraction.
+
+### Preview selection and errors
+
+TIFF JPEG offset/length pairs and Olympus CameraSettings previews use their
+evidenced offset bases. Candidates must fit the file, preview/working quotas,
+and dimension/pixel limits, have SOI/terminal EOI markers, and contain a supported
+JPEG frame header. `Open` examines headers, **not entropy-coded pixels**; this
+does not certify the full JPEG stream. Selection is deterministic: largest
+pixel area, then largest byte length, then lowest absolute offset.
+
+`Preview(ctx)` separately copies the selected original bytes with bounded reads
+and cancellation checks. `ErrNoPreview` is the documented typed outcome when
+no candidate is present, valid, or within configured limits; metadata diagnostics
+describe invalid/over-limit candidates. Structurally invalid references and real
+I/O failures are not swallowed. `errors.Is` preserves cancellation and reader
+failures, and no partial preview escapes on failure.
+
+Orientation applies to embedded JPEG pixels, not implicitly to sensor pixels.
+An orientation in the preview's own TIFF IFD is preserved. The measured Olympus
+CameraSettings previews have no independently verified display transform, so
+their returned orientation remains unavailable with a diagnostic; the library
+does not guess that the sensor orientation applies.
+
+### Deterministic diagnostic command
+
+```sh
+CGO_ENABLED=0 go run ./cmd/orfinfo path/to/input.orf
+```
+
+Output is versioned JSON (`SchemaVersion: 1`, `Metadata`, `Capabilities`) with
+stable field/slice ordering, no timestamps or environment-dependent filenames,
+and explicit value provenance and capability reasons. Usage errors exit 2;
+file, parser, and output errors exit 1 with diagnostics on stderr. A safely
+opened metadata-only unsupported file exits 0 but cannot claim raw capability.
+
+### Phase 2 validation and completion review
+
+Ordinary tests use synthetic, small ORFs/JPEGs and need no native tools, network,
+or photographs. The separate required-corpus gate is explicit and **fails**
+rather than skips when fixtures are missing:
+
+```sh
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go vet ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go build ./...
+GOTOOLCHAIN=go1.26.0 go test -race -tags=integration ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz=FuzzOpenORF -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
+```
+
+Fetch the licensed originals using the [reference workflow](tools/reference/README.md)
+before running integration tests. `ORF_FIXTURE_DIR` optionally specifies their
+directory; otherwise `.cache/fixtures` is used. The gate checks every input's
+SHA-256 before comparing all four metadata sets with pinned ExifTool/LibRaw
+expectations and JPEG bytes at independent reference offsets. A read spy ensures
+opening/extraction never reads raw pixels (only the seven-byte compressed prefix
+where required). Golden/reference artifacts are unchanged.
+
+Repeated re-evaluation resolved classic-reader error precedence, exact old-block
+compatibility, metadata string preservation, platform allocation checks,
+payload/metadata/preview overlap, logical versus physical strip order, independent
+JPEG scratch limits, no-preview error semantics, cancellation at operation
+completion, conservative map/extent-storage accounting, and unknown preview
+orientation. Tests also cover contradictory
+calibration, unsupported codec prefixes/modes, invalid JPEG headers, snapshot
+ownership, concurrent calls, and command output failures.
+
+Final validation on macOS/arm64:
+
+- Go 1.26.0: offline and integration tests, vet, and CGO-disabled builds pass.
+- Go 1.27.3 integration tests and Go 1.26.0 race-enabled integration tests pass.
+  CGO is enabled only for the race runtime in that check.
+- Aggregate instrumented statement coverage (`-coverpkg=./...`): **91.0%**.
+- Final full-parser fuzz gate: **6,596,594 executions in 60 seconds**;
+  TIFF primitive regression fuzz gate: **5,832,907 in 30 seconds**. No failures.
+- Linux/386 tests, including integration tests, cross-compile with
+  `go test -exec=true`; this does **not** claim Linux runtime execution.
+  Linux/amd64 production packages build.
+- Production dependency inspection finds only the standard library and no
+  CgoFiles/CXXFiles. Standalone reference tests and all four offline
+  fixture/artifact/layout/hash integrity checks pass unchanged.
+
+The Phase 2 gate is satisfied only for parsing/planning and preview extraction.
+Two fixtures per initial layout are evidence, not camera/mode certification:
+there is still only one file per camera, and M1 sample parity awaits Phases 3-4.
+
 ## Phase 1 contracts
 
 The root `libraw` package provides:
@@ -35,8 +187,9 @@ The root `libraw` package provides:
 - Raw-origin 2x2 `CFA`/`Levels` types with distinct green positions, original
   EXIF `Orientation` values, and structured nonfatal diagnostics.
 - `Metadata.Clone` for independent snapshots, including diagnostic slices.
-- Seven `errors.Is` sentinels and a contextual `Error` compatible with
-  `errors.As`, preserving underlying I/O failures and cancellation.
+- Eight `errors.Is` sentinels (including Phase 2's `ErrNoPreview`) and a
+  contextual `Error` compatible with `errors.As`, preserving underlying
+  I/O failures and cancellation.
 - `OpenOptions.Resolve` and `DefaultLimits` for validated, value-owned
   resource settings. Zero fields use defaults; negatives and contradictory
   depth/IFD or working-buffer budgets fail explicitly.
@@ -60,14 +213,10 @@ process/RSS guarantees. Raising them never disables overflow or platform-int
 checks. A lowered working-buffer budget must still cover the resolved
 metadata and preview limits, and resolved depth must not exceed the IFD quota.
 
-Future `Open`/`File` operations will borrow a caller-owned, unchanged
-`io.ReaderAt`, not close it or buffer the entire file. Each operation will
-have its own mutable decode state; concurrent calls will require a
-concurrently readable input. `RawImage`/`Preview` results will be caller-owned.
-No placeholder `Open`, `DecodeRaw`, or `Render` implementation is exposed:
-recognition and traversal belong to Phase 2, decoders to Phases 3-4, rendering
-to Phase 6. This avoids returning unsupported for every file as if opening
-were implemented.
+`Open`/`File` now implement the borrowed-input and ownership contracts described
+above. `RawImage` remains the contract for Phases 3-4; `DecodeRaw` explicitly
+reports unavailable pixel decoders rather than fabricating pixels or preview
+fallbacks. No `Render` implementation is exposed before Phase 6.
 
 ### Internal primitives
 
@@ -90,11 +239,11 @@ tag value bytes, and are not refunded on failure or discard. Unknown field
 types, zero counts, invalid typed access, zero rational denominators,
 nonfinite real values, and malformed ASCII fail explicitly.
 
-This is not a general TIFF image decoder, graph walker, or MakerNote parser.
-Duplicate-tag policy, IFD cycles/depth, raw-IFD selection, and bounded
-compatibility for the measured old Olympus short-directory framing belong
-to Phase 2. A generic classic reader is deliberately not relaxed to accept
-that variant without explicit framing policy.
+The internal TIFF package is not a general image decoder or graph walker.
+Phase 2 adds selective materialization while still validating every entry's
+structure/extent, shared aggregate budgets, and explicitly selected
+directory-without-next-pointer framing. The generic classic reader retains
+its strict framing; the root ORF parser owns traversal/MakerNote policy.
 
 ### Build and test
 

@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: LGPL-2.1-only
+
+package libraw
+
+import (
+	"bytes"
+	"cmp"
+	"encoding/binary"
+	"slices"
+
+	"github.com/otuschhoff/libraw-go/internal/bounded"
+	"github.com/otuschhoff/libraw-go/internal/tiff"
+)
+
+type stripPlan struct {
+	offset int64
+	length uint64
+	row    uint64
+	rows   uint64
+}
+
+// Plans are private, immutable, and independent of temporary TIFF entry buffers.
+// Layout recognition is not a promise that a pixel decoder is implemented.
+type decodePlan struct {
+	layout        string
+	strips        []stripPlan
+	width, height int
+	bits          uint8
+	rightShift    uint8
+	outputBytes   uint64
+	scratchBytes  uint64
+	geometry      Geometry
+	cfa           CFA
+	storageBits   uint8
+	byteOrder     binary.ByteOrder
+	bitOrder      string
+	headerBytes   uint8
+	rowBytes      uint64
+}
+
+func (p *parser) makePlan(d directory) (decodePlan, string, error) {
+	m := p.metadata
+	plan := decodePlan{width: m.Geometry.Width, height: m.Geometry.Height, bits: m.BitDepth.Value, geometry: m.Geometry, cfa: m.CFA.Value}
+	output, err := bounded.Mul(uint64(plan.width)*uint64(plan.height), 2)
+	if err != nil {
+		return plan, "", err
+	}
+	plan.outputBytes = output
+	if _, err := bounded.Int(output); err != nil {
+		return plan, "", err
+	}
+	// No pixel allocation is performed here. DecodeRaw will enforce output and
+	// scratch quotas again once a decoder exists.
+	offsets, hasOffsets := d.entries[0x111]
+	counts, hasCounts := d.entries[0x117]
+	rowsEntry, hasRows := d.entries[0x116]
+	if hasOffsets != hasCounts {
+		return plan, "", corrupt("strip descriptors", "incomplete offset/byte-count pair")
+	}
+	tiles, hasTiles := d.entries[0x144]
+	tileCounts, hasTileCounts := d.entries[0x145]
+	if hasTiles != hasTileCounts {
+		return plan, "", corrupt("tile descriptors", "incomplete offset/byte-count pair")
+	}
+	if hasTiles {
+		if hasOffsets {
+			return plan, "", corrupt("raw organization", "both strip and tile payload descriptors")
+		}
+		if err := p.payloadExtents(tiles, tileCounts); err != nil {
+			return plan, "", err
+		}
+		return plan, "unsupported raw organization: tiled reconstruction is deferred", nil
+	}
+	if !hasOffsets {
+		return plan, "unsupported raw organization: no evidenced payload descriptors", nil
+	}
+	if err := p.payloadExtents(offsets, counts); err != nil {
+		return plan, "", err
+	}
+	if !hasRows {
+		return plan, "", corrupt("strip descriptors", "missing rows per strip")
+	}
+	if offsets.Type != tiff.Long || counts.Type != tiff.Long || offsets.Count != counts.Count {
+		return plan, "", badEntry(offsets, "strip offsets/counts require equal LONG arrays")
+	}
+	rows, err := scalar(rowsEntry, tiff.Short, tiff.Long)
+	if err != nil {
+		return plan, "", err
+	}
+	if rows == 0 {
+		return plan, "", badEntry(rowsEntry, "zero rows per strip")
+	}
+	expected := (uint64(plan.height) + rows - 1) / rows
+	if uint64(offsets.Count) != expected {
+		return plan, "", badEntry(offsets, "strip count does not cover rows exactly")
+	}
+	if err := p.reader.Reserve(uint64(offsets.Count) * 64); err != nil {
+		return plan, "", err
+	}
+	plan.strips = make([]stripPlan, offsets.Count)
+	word := true
+	for i := range plan.strips {
+		offset, err := offsets.Uint(uint32(i))
+		if err != nil {
+			return plan, "", err
+		}
+		length, err := counts.Uint(uint32(i))
+		if err != nil {
+			return plan, "", err
+		}
+		if offset < 8 || length == 0 {
+			return plan, "", badEntry(offsets, "strip overlaps header or has zero byte count")
+		}
+		if err := p.source.Extent(int64(offset), length); err != nil {
+			return plan, "", err
+		}
+		row := uint64(i) * rows
+		stripRows := min(rows, uint64(plan.height)-row)
+		plan.strips[i] = stripPlan{offset: int64(offset), length: length, row: row, rows: stripRows}
+		if length != uint64(plan.width)*stripRows*2 {
+			word = false
+		}
+		// Initial evidence covers physically contiguous logical strips. Other
+		// orders/gaps remain metadata-only; never concatenate on assumption.
+		if i > 0 {
+			previous := plan.strips[i-1]
+			if uint64(offset) < uint64(previous.offset)+previous.length {
+				word = false
+			}
+			if uint64(offset) != uint64(previous.offset)+previous.length {
+				word = false
+			}
+		}
+	}
+	bits, err := scalar(d.entries[0x102], tiff.Short)
+	if err != nil {
+		return plan, "", err
+	}
+	compression, err := scalar(d.entries[0x103], tiff.Short)
+	if err != nil {
+		return plan, "", err
+	}
+	photo, err := scalar(d.entries[0x106], tiff.Short)
+	if err != nil {
+		return plan, "", err
+	}
+	if bits != 16 || compression != 1 || photo != 1 || p.validBits != 12 || !m.CFA.Present() {
+		return plan, "unsupported raw encoding: evidenced 16-bit container, compression=1, 12 valid bits and Bayer CFA required", nil
+	}
+	plan.storageBits, plan.byteOrder = 16, binary.LittleEndian
+	model, identity := m.NormalizedModel, p.cameraID
+	if m.NormalizedMake != "Olympus" {
+		return plan, "unsupported camera make; no evidenced layout selector", nil
+	}
+	expectedMode := "SpecialMode=0 0 0;DriveMode=0 0 0"
+	if model == "E-1" {
+		expectedMode = "SpecialMode=0 0 0;DriveMode=0 0"
+	}
+	if p.mode != expectedMode && !(model == "E-410" && p.mode == "SpecialMode=2 1 0;DriveMode=1 1 0") {
+		return plan, "unsupported capture mode; only fixture-evidenced single stored Bayer frames are planned", nil
+	}
+	if p.makerForm == "OLYMP" && ((model == "E-1" && identity == "D4040") || (model == "E-400" && identity == "S0009")) && word {
+		if m.CFA.Value != (CFA{{Green1, Red}, {Blue, Green2}}) {
+			return plan, "unsupported raw CFA for evidenced word layout", nil
+		}
+		plan.layout, plan.rightShift = "olympus-word16le-high12", 4
+		plan.rowBytes = uint64(plan.width) * 2
+		plan.scratchBytes = uint64(plan.width) * 2
+		return plan, "identified olympus-word16le-high12; pixel decoder deferred to Phase 3", nil
+	}
+	if p.makerForm == "OLYMPUS" && ((model == "E-410" && identity == "S0013") || (model == "E-510" && identity == "S0010")) &&
+		len(plan.strips) == 1 && !word {
+		if plan.width%2 != 0 {
+			return plan, "unsupported odd coded width for evidenced legacy predictive layout", nil
+		}
+		if m.CFA.Value != (CFA{{Red, Green1}, {Green2, Blue}}) {
+			return plan, "unsupported raw CFA for evidenced predictive layout", nil
+		}
+		var prefix [7]byte
+		if plan.strips[0].length < uint64(len(prefix)) {
+			return plan, "", corrupt("legacy raw prefix", "compressed strip shorter than prefix")
+		}
+		if err := p.source.ReadAt(prefix[:], plan.strips[0].offset); err != nil {
+			return plan, "", err
+		}
+		if !bytes.Equal(prefix[:], []byte{0, 0, 0, 0, 1, 0, 0}) {
+			return plan, "unsupported compressed prefix; newer parameterized codecs are not legacy predictive", nil
+		}
+		plan.layout = "olympus-legacy-predictive12"
+		plan.headerBytes, plan.bitOrder = 7, "MSB-first"
+		plan.scratchBytes = uint64(plan.width)*8 + 4096
+		return plan, "identified olympus-legacy-predictive12; pixel decoder deferred to Phase 4", nil
+	}
+	return plan, "unsupported model/identity, MakerNote variant, or strip layout; no camera-name-only decoder guess", nil
+}
+
+func (p *parser) payloadExtents(offsets, counts tiff.Entry) error {
+	if offsets.Type != tiff.Long || counts.Type != tiff.Long || offsets.Count != counts.Count {
+		return badEntry(offsets, "payload offsets/counts require equal LONG arrays")
+	}
+	if err := p.reader.Reserve(uint64(offsets.Count) * 64); err != nil {
+		return err
+	}
+	spans := make([]fileExtent, offsets.Count)
+	for i := uint32(0); i < offsets.Count; i++ {
+		offset, err := offsets.Uint(i)
+		if err != nil {
+			return err
+		}
+		count, err := counts.Uint(i)
+		if err != nil {
+			return err
+		}
+		if offset < 8 || count == 0 {
+			return badEntry(offsets, "payload overlaps header or has zero byte count")
+		}
+		if err := p.source.Extent(int64(offset), count); err != nil {
+			return err
+		}
+		for _, table := range p.tables {
+			if offset < uint64(table.offset)+table.length && uint64(table.offset) < offset+count {
+				return badEntry(offsets, "payload overlaps a parsed directory table")
+			}
+		}
+		for _, value := range p.values {
+			if offset < uint64(value.offset)+value.length && uint64(value.offset) < offset+count {
+				return badEntry(offsets, "payload overlaps materialized metadata")
+			}
+		}
+		for _, preview := range p.previews {
+			if offset < uint64(preview.offset)+preview.length && uint64(preview.offset) < offset+count {
+				return badEntry(offsets, "raw payload overlaps an embedded JPEG extent")
+			}
+		}
+		spans[i] = fileExtent{offset: int64(offset), length: count}
+	}
+	slices.SortFunc(spans, func(a, b fileExtent) int { return cmp.Compare(a.offset, b.offset) })
+	for i := 1; i < len(spans); i++ {
+		if uint64(spans[i].offset) < uint64(spans[i-1].offset)+spans[i-1].length {
+			return badEntry(offsets, "overlapping payload extents")
+		}
+	}
+	return nil
+}

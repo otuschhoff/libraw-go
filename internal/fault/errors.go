@@ -15,6 +15,7 @@ var (
 	Limit       = errors.New("resource limit exceeded")
 	Calibration = errors.New("required calibration unavailable")
 	Options     = errors.New("invalid options")
+	NoPreview   = errors.New("no supported embedded JPEG preview")
 )
 
 // Error preserves both classification and the underlying cause. Location is

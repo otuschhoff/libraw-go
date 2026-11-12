@@ -3,7 +3,9 @@
 Status: implementation specification; Phase 0 evidence and reference tooling
 are recorded in [the Phase 0 report](docs/phase0.md). Phase 1's module,
 contracts, and bounded primitives are described in [README](README.md).
-No production ORF opener or decoder has been implemented.
+Phase 2 implements bounded ORF metadata, layout plans, JPEG extraction, and
+the diagnostic CLI. Pixel decoding (Phases 3-4) and rendering are not yet
+implemented; no raw capability or camera certification is advertised.
 
 ## 1. Objective
 
@@ -260,6 +262,8 @@ Provide sentinel errors compatible with `errors.Is` for:
 - Resource limit exceeded.
 - Required rendering calibration unavailable.
 - Invalid API options.
+- No supported embedded JPEG preview (including candidates excluded by
+  preview/working/dimension limits, with detailed metadata diagnostics).
 
 Wrap errors with operation, tag/IFD or layout, and byte/bit position where
 available. Preserve underlying I/O errors and context cancellation.
@@ -649,6 +653,15 @@ typed errors without panics.
 **Gate:** manifest metadata matches reference expectations; cycles, ambiguous
 raw IFDs, and incorrect bases are tested; previews match original embedded
 bytes; metadata-only unsupported ORFs never claim RAW capability.
+
+**Implementation status:** complete; see the Phase 2 section of
+[README](README.md) for executable gates and the exact supported parsing
+surface. Only evidenced `IIRO` framing and the old `OLYMP` / new little-endian
+`OLYMPUS` MakerNotes are parsed. `IIRS` and `MMOR` report unsupported;
+ordinary TIFF is not ORF. Layout IDs describe validated future decoder plans,
+not available raw decoders. JPEG selection inspects bounded frame headers and
+terminal markers without decoding entropy/pixels; extraction returns exact
+embedded bytes. Unverified Olympus preview orientation remains unavailable.
 
 ### Phase 3: older word-based and packed layouts
 

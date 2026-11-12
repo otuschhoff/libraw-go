@@ -357,3 +357,36 @@ unknown. No high-resolution/pixel-shift or ORI input is included.
 There are two distinct real files per measured layout but only one per
 camera/mode. Phase 0 therefore establishes initial layout evidence, not the
 design's production camera-certification gate. No production decoder exists.
+
+## 7. Embedded JPEG evidence (Phase 2)
+
+The Olympus CameraSettings directory contains `PreviewImageValid` (`0x0100`,
+LONG), `PreviewImageStart` (`0x0101`, LONG), and `PreviewImageLength` (`0x0102`,
+LONG). A valid flag of one enables the start/length pair. Old OLYMP starts are
+file-relative; new OLYMPUS starts are MakerNote-relative. For example, E-410
+stores 21248, resolved against MakerNote base 3328 to absolute byte 24576.
+ExifTool's normalized PreviewImageStart in the frozen reference JSON is already
+absolute; production parsing must not add the base a second time.
+
+The production integration gate independently reads the reference-selected file
+range and compares every extracted JPEG byte:
+
+| Fixture | Absolute start | Bytes | JPEG dimensions | SHA-256 |
+|---|---:|---:|---:|---|
+| olympus-e-1-1800 | 34156 | 291265 | 1280 x 960 | `2b24d47b4763a8556d5b8014e96031ea95242e6a5f316a35a6f64524f4411865` |
+| olympus-e-400-2151 | 24576 | 308009 | 1600 x 1200 | `b5076607e9c75e2db4095f8892e72fc599caf8499f6b05df086a00db3cf21890` |
+| olympus-e-410-1173 | 24576 | 388113 | 1600 x 1200 | `b39a567cf8ee06b64811eb4c6c64e08f8c391f5317716480ff0fa8d0f5cb4079` |
+| olympus-e-510-5449 | 24576 | 422737 | 1600 x 1200 | `3da97b5824419f4ddf4d73df303cb0a4f2cec3de8c98e9a51fd1bf253866b87d` |
+
+E-1/E-400 also contain smaller TIFF IFD1 JPEGs. TIFF JPEG offsets use the
+file origin, not the MakerNote base. Supported candidates are selected by
+descending pixel area, descending byte length, then ascending absolute offset.
+Opening validates extents, SOI/terminal EOI, supported JPEG frame headers and
+configured limits without decoding entropy/pixels. Preview extraction returns
+the original bytes separately, never a raw fallback.
+
+The four Olympus CameraSettings previews have no independently verified
+orientation-to-display transform. The sensor EXIF orientation is not proof of
+their encoded-pixel orientation. Production therefore leaves that preview
+orientation unavailable and reports a diagnostic. When a TIFF preview IFD
+provides its own EXIF orientation, that value is preserved unchanged.

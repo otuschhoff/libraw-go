@@ -98,17 +98,19 @@ type Metadata struct {
 	CameraID                        Value[string]
 	Firmware                        Value[string]
 	Software                        Value[string]
-	CaptureMode                     Value[string]
-	Geometry                        Geometry
-	CFA                             Value[CFA]
-	BitDepth                        Value[uint8]
-	Orientation                     Value[Orientation]
-	ExposureTime                    Value[float64]
-	FNumber                         Value[float64]
-	ISO                             Value[float64]
-	FocalLength                     Value[float64]
-	Calibration                     Calibration
-	Diagnostics                     []Diagnostic
+	// Layout identifies an evidenced storage plan, not an available decoder.
+	Layout       Value[string]
+	CaptureMode  Value[string]
+	Geometry     Geometry
+	CFA          Value[CFA]
+	BitDepth     Value[uint8]
+	Orientation  Value[Orientation]
+	ExposureTime Value[float64]
+	FNumber      Value[float64]
+	ISO          Value[float64]
+	FocalLength  Value[float64]
+	Calibration  Calibration
+	Diagnostics  []Diagnostic
 }
 
 // Clone returns an independent snapshot, including its diagnostic slice.
