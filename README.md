@@ -2,10 +2,11 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 4 complete: exact sensor-code decoding for the evidenced
+**Current status: Phase 5 / M1 raw-decoding hardening: exact sensor-code decoding for the evidenced
 `olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
-metadata, embedded JPEGs and `orfinfo`. Rendering is not implemented. Layout
-coverage is not camera/mode certification or an M1 release.**
+metadata, embedded JPEGs and `orfinfo`. Rendering is not implemented. This is a
+layout-scoped source milestone, not camera/mode certification or a tagged
+release. See the [M1 support and validation contract](docs/m1.md).**
 
 ## Project decisions
 
@@ -22,6 +23,39 @@ The production module is initialized at the approved path and Go version.
 It depends only on the standard library and builds with `CGO_ENABLED=0`.
 Native tools below remain development-only, with no native or
 external-process production dependency.
+
+## Phase 5: M1 hardening and release validation
+
+The [M1 report](docs/m1.md) documents the tested identity/MakerNote/layout/mode
+matrix, API usage, ownership, errors, resource limits, fixture workflow,
+reproducible validation and performance baseline. Only one fixture per camera
+is available: the camera-certification gate remains unmet and is not waived.
+
+Hardening adds a 2-GiB geometry boundary test without allocating the plane, mixed concurrent
+metadata/capability/preview/RAW calls, targeted old/new MakerNote fuzzing, valid
+complete-decoder parser seeds, and separate parse benchmarks. Exact comparisons
+now report total mismatches and maximum absolute error as well as the first
+raw-coordinate mismatch. All **36,691,904 samples** still match the unchanged
+pinned oracles exactly.
+
+All six fuzz targets completed **600 seconds each**, totaling **78,325,616
+executions without failure**. Minimum/current-Go integration, native race
+tests, vet, CGO-disabled builds, reference-tool tests and original/golden
+integrity checks pass locally. Native Linux/arm64 integration also passes;
+local Linux/386 checks are explicitly compile-only.
+
+The [CI workflow](.github/workflows/ci.yml) adds native Linux/macOS amd64/arm64
+integration and races, minimum/current-Go checks, actual Linux/386 execution,
+production dependency/native-input checks, and six fuzz smoke jobs. Manual
+dispatch runs the full ten-minute fuzz gates. Every required CI check must
+pass before publishing an M1 tag.
+
+Parse benchmarks record roughly 53-70 microseconds and 86-105 kB per fixture.
+RAW decoding retains one output plane plus row/4096-byte scratch, not a second
+image or whole strip. Repeated same-session comparisons against Phase 4
+investigated noisy timings; median E-400/E-410 differences were 5.3%/1.7%,
+below the 10% investigation threshold. Detailed measurements and caveats are
+in the [M1 report](docs/m1.md#performance-and-release-boundary).
 
 ## Phase 4: legacy predictive compressed RAW decoding
 
@@ -119,8 +153,8 @@ Three 300ms benchmark repeats on Apple M1 Max (each predictive iteration exceeds
 
 These are local observations, not machine-independent performance promises.
 Repeated completeness review leaves no outstanding Phase 4 findings.
-M1 release hardening, longer fuzz gates, and broader platform/camera
-certification remain Phase 5, not a claim of this phase.
+That phase did not claim M1 release hardening or longer fuzz/platform gates;
+see Phase 5 above for that subsequent work. Camera certification remains open.
 
 ## Phase 3: evidenced word-based RAW decoding
 

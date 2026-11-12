@@ -131,6 +131,7 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 			row := make([]byte, raw.Width*2)
 			decodedRow := make([]byte, len(row))
 			expectedHash, actualHash := sha256.New(), sha256.New()
+			var comparison sampleComparison
 			for y := range raw.Height {
 				if _, err := io.ReadFull(stream, row); err != nil {
 					t.Fatalf("golden row %d: %v", y, err)
@@ -139,9 +140,7 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 				for x := range raw.Width {
 					i := y*raw.Width + x
 					expected := binary.LittleEndian.Uint16(row[x*2:])
-					if raw.Pixels[i] != expected {
-						t.Fatalf("first raw mismatch layout=%s sample=%d x=%d y=%d coordinate-domain=sensor got=%d want=%d", layout, i, x, y, raw.Pixels[i], expected)
-					}
+					comparison.add(i, raw.Pixels[i], expected)
 					binary.LittleEndian.PutUint16(decodedRow[x*2:], raw.Pixels[i])
 				}
 				actualHash.Write(decodedRow)
@@ -150,6 +149,9 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 			var extra [1]byte
 			if n, err := stream.Read(extra[:]); n != 0 || err != io.EOF {
 				t.Fatalf("golden trailing data/checksum: n=%d err=%v", n, err)
+			}
+			if comparison.mismatches != 0 || comparison.maxError != 0 {
+				t.Fatal(comparison.summary(raw.Width, layout))
 			}
 			if hex.EncodeToString(compressedHash.Sum(nil)) != artifact.SHA256 ||
 				hex.EncodeToString(expectedHash.Sum(nil)) != oracle.SamplesSHA256 ||
@@ -190,6 +192,15 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 }
 
 func BenchmarkReferenceDecode(b *testing.B) {
+	benchmarkReferenceOperation(b, true)
+}
+
+func BenchmarkReferenceOpen(b *testing.B) {
+	benchmarkReferenceOperation(b, false)
+}
+
+func benchmarkReferenceOperation(b *testing.B, decode bool) {
+	b.Helper()
 	var manifest struct {
 		Fixtures []struct{ ID, SHA256, Layout string }
 	}
@@ -219,14 +230,24 @@ func BenchmarkReferenceDecode(b *testing.B) {
 			}
 			b.Logf("input_sha256=%s dimensions=%dx%d", fixture.SHA256, file.plan.width, file.plan.height)
 			b.ReportAllocs()
-			b.SetBytes(int64(file.plan.outputBytes))
+			if decode {
+				b.SetBytes(int64(file.plan.outputBytes))
+			}
 			b.ResetTimer()
 			for b.Loop() {
-				if _, err := file.DecodeRaw(context.Background()); err != nil {
-					b.Fatal(err)
+				if decode {
+					if _, err := file.DecodeRaw(context.Background()); err != nil {
+						b.Fatal(err)
+					}
+				} else {
+					if _, err := Open(input, info.Size(), OpenOptions{}); err != nil {
+						b.Fatal(err)
+					}
 				}
 			}
-			b.ReportMetric(float64(file.plan.width*file.plan.height)*float64(b.N)/b.Elapsed().Seconds()/1e6, "MP/s")
+			if decode {
+				b.ReportMetric(float64(file.plan.width*file.plan.height)*float64(b.N)/b.Elapsed().Seconds()/1e6, "MP/s")
+			}
 		})
 	}
 }

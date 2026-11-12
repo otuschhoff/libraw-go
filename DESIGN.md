@@ -6,8 +6,10 @@ contracts, and bounded primitives are described in [README](README.md).
 Phase 2 implements bounded ORF metadata, layout plans, JPEG extraction, and
 the diagnostic CLI. Phase 3 implements the evidenced word16le-high12 sensor
 decoder with exact sample parity. Phase 4 implements the evidenced legacy
-predictive decoder with exact sample parity. Rendering, M1 release hardening
-and camera certification remain later gates.
+predictive decoder with exact sample parity. Phase 5 adds M1 raw-decoding
+hardening, long fuzz gates, portable CI and release documentation, recorded in
+the [M1 report](docs/m1.md). Rendering and camera certification remain later
+gates; no release tag is implied.
 
 ## 1. Objective
 
@@ -741,6 +743,17 @@ without a failure; Linux/macOS on amd64/arm64 build and applicable CI runners
 test successfully; a 32-bit build and arithmetic-focused tests pass.
 Use compile-only checks for unavailable target runners and state that
 limitation explicitly. M1 can now be released.
+
+**Implementation status:** the layout-scoped M1 hardening is implemented.
+All six parser/MakerNote/complete-decoder fuzz targets passed 600 seconds each
+(78,325,616 total executions). Full-plane goldens now report mismatch count and
+maximum error as well as the first mismatch. Mixed concurrent operations,
+2-GiB/platform-int boundaries, existing cancellation/quota cases, parse/decode
+benchmarks and native Linux/arm64 checks pass. The portable workflow runs
+Linux/macOS amd64/arm64 integration/races and actual Linux/386 tests; local
+Linux/386 cross-tests are compile-only. Required CI results remain a release
+gate. The [M1 report](docs/m1.md) records support, API/errors, fixture commands,
+measurements and remaining certification/rendering limitations.
 
 ### Phase 6: calibration and deterministic development
 

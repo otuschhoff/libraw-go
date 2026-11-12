@@ -1,0 +1,100 @@
+name: M1 validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: ${{ matrix.os }} / Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            go: 1.26.0
+          - os: ubuntu-24.04-arm
+            go: 1.26.0
+          - os: macos-15
+            go: 1.26.0
+          - os: macos-15-intel
+            go: 1.26.0
+          - os: ubuntu-24.04
+            go: 1.27.3
+    env:
+      CGO_ENABLED: "0"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - name: Explicitly fetch and verify licensed fixtures
+        run: |
+          go run tools/reference/main.go fetch
+          go run tools/reference/main.go verify
+      - name: CGO-disabled integration, vet and build
+        run: |
+          go version
+          go env GOOS GOARCH
+          go test -tags=integration -count=1 ./...
+          go vet ./...
+          go build ./...
+          go test tools/reference/main.go tools/reference/main_test.go
+          unexpected=$(CGO_ENABLED=1 go list -deps -f '{{if not .Standard}}{{if not .Module.Main}}{{.ImportPath}}: non-standard dependency{{end}}{{if or .CgoFiles .CFiles .CXXFiles .MFiles .HFiles .FFiles .SFiles .SwigFiles .SwigCXXFiles .SysoFiles}}{{.ImportPath}}: native files{{end}}{{end}}' ./...)
+          if [ -n "$unexpected" ]; then
+            printf 'Unexpected production dependencies or native inputs:\n%s\n' "$unexpected"
+            exit 1
+          fi
+      - name: Race-enabled integration
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -tags=integration -count=1 ./...
+      - name: 32-bit runtime including arithmetic boundaries
+        if: matrix.os == 'ubuntu-24.04' && matrix.go == '1.26.0'
+        env:
+          GOARCH: "386"
+        run: go test -tags=integration -count=1 ./...
+
+  fuzz:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: .
+            target: FuzzOpenORF
+          - package: .
+            target: FuzzMakerNotes
+          - package: .
+            target: FuzzDecodeWord
+          - package: .
+            target: FuzzDecodeLegacy
+          - package: .
+            target: FuzzLegacyRoundTrip
+          - package: ./internal/tiff
+            target: FuzzReadIFD
+    env:
+      CGO_ENABLED: "0"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.0
+          cache: false
+      - name: Bounded parser and decoder fuzzing
+        env:
+          FUZZ_TIME: ${{ github.event_name == 'workflow_dispatch' && '600s' || '10s' }}
+          TARGET: ${{ matrix.target }}
+          PACKAGE: ${{ matrix.package }}
+        run: go test -run='^$' -fuzz="^${TARGET}$" -fuzztime="$FUZZ_TIME" -fuzzminimizetime=1s -parallel=2 "$PACKAGE"

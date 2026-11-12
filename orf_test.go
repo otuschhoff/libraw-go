@@ -10,7 +10,6 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -440,6 +439,10 @@ func (r *switchReader) ReadAt(data []byte, offset int64) (int, error) {
 func FuzzOpenORF(f *testing.F) {
 	f.Add(makeTestORF(false))
 	f.Add(makeTestORF(true))
+	wordSeed, _ := wordORF(16, 8, 3)
+	f.Add(wordSeed)
+	predictiveSeed, _ := encodeLegacy(legacyPlane(16, 8), 16, 8)
+	f.Add(legacyORF(16, 8, predictiveSeed))
 	f.Add([]byte("IIRO\x08\x00\x00\x00"))
 	previewSeed, _, _ := withPreviews(f)
 	f.Add(previewSeed)
@@ -455,22 +458,6 @@ func FuzzOpenORF(f *testing.F) {
 			}
 			return
 		}
-		m := file.Metadata()
-		if !reflect.DeepEqual(m, file.Metadata()) || file.Capabilities().Render.Available ||
-			(file.Capabilities().Raw.Available && m.Layout.Value != "olympus-word16le-high12" && m.Layout.Value != "olympus-legacy-predictive12") {
-			t.Fatal("unstable metadata or false capabilities")
-		}
-		preview, err := file.Preview(context.Background())
-		if err != nil && preview != nil {
-			t.Fatal("partial preview on error")
-		}
-		raw, err := file.DecodeRaw(context.Background())
-		if err != nil {
-			if raw != nil || (file.Capabilities().Raw.Available && errors.Is(err, ErrUnsupported)) {
-				t.Fatalf("partial raw result or implemented codec unsupported: %v", err)
-			}
-		} else if !file.Capabilities().Raw.Available || raw.Stride != raw.Width || len(raw.Pixels) != raw.Width*raw.Height {
-			t.Fatal("invalid decoded raw shape or capability")
-		}
+		checkFuzzOperations(t, file)
 	})
 }
