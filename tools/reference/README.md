@@ -1,8 +1,11 @@
 # Development-only ORF reference workflow
 
 This tool implements Phase 0 evidence acquisition, not the production RAW
-decoder. All Go code uses the standard library and runs by filename without
-a production `go.mod`.
+decoder. All Go code uses the standard library and runs by filename.
+Phase 1 isolates this directory in a nested Go module so the production
+module's `go test ./...` never attempts to compile the native C++ exporter.
+Keep using the explicit file-list commands below for reference-tool tests;
+the reference directory is not an ordinary CGO package.
 
 ## Pinned inputs and prerequisites
 

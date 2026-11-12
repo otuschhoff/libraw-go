@@ -1,8 +1,9 @@
 # Pure-Go Olympus ORF Decoder: Design and Execution Specification
 
 Status: implementation specification; Phase 0 evidence and reference tooling
-are recorded in [the Phase 0 report](docs/phase0.md). No production decoder
-has been implemented.
+are recorded in [the Phase 0 report](docs/phase0.md). Phase 1's module,
+contracts, and bounded primitives are described in [README](README.md).
+No production ORF opener or decoder has been implemented.
 
 ## 1. Objective
 
