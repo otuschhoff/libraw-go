@@ -44,10 +44,11 @@ func (f *File) Metadata() Metadata { return f.metadata.Clone() }
 func (f *File) Capabilities() Capabilities { return f.caps }
 
 // DecodeRaw returns caller-owned, unprocessed sensor codes for an evidenced
-// word layout. It retains all sensor pixels without cropping, orientation,
-// black subtraction or scaling. Other layouts return ErrUnsupported; an
-// embedded JPEG is never substituted. Cancellation cannot interrupt a blocked
-// caller-supplied ReaderAt, but is checked between rows and before success.
+// word or legacy predictive layout. It retains all sensor pixels without
+// cropping, orientation, black subtraction or scaling. Other layouts return
+// ErrUnsupported; an embedded JPEG is never substituted. Cancellation cannot
+// interrupt a blocked caller-supplied ReaderAt, but is checked between rows and
+// before success.
 func (f *File) DecodeRaw(ctx context.Context) (*RawImage, error) {
 	if err := f.operation(ctx); err != nil {
 		return nil, err
@@ -55,6 +56,8 @@ func (f *File) DecodeRaw(ctx context.Context) (*RawImage, error) {
 	switch f.plan.layout {
 	case "olympus-word16le-high12":
 		return f.decodeWord(ctx)
+	case "olympus-legacy-predictive12":
+		return f.decodeLegacy(ctx)
 	default:
 		return nil, &Error{Op: "decode raw", Kind: ErrUnsupported, Layout: f.plan.layout, Detail: f.caps.Raw.Reason}
 	}

@@ -30,7 +30,7 @@ func (f *File) rawResources() (pixels, rowBytes, diagnostics int, err error) {
 		return 0, 0, 0, err
 	}
 	if working > uint64(f.limits.WorkingBytes) {
-		return 0, 0, 0, &Error{Op: "decode raw", Kind: ErrLimitExceeded, Layout: f.plan.layout, Detail: "output plane, row scratch and diagnostics exceed working buffer quota"}
+		return 0, 0, 0, &Error{Op: "decode raw", Kind: ErrLimitExceeded, Layout: f.plan.layout, Detail: "output plane, codec scratch and diagnostics exceed working buffer quota"}
 	}
 	pixels, err = bounded.Int(f.plan.outputBytes / 2)
 	if err != nil {
@@ -71,6 +71,10 @@ func (f *File) decodeWord(ctx context.Context) (*RawImage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{Op: "decode raw", Cause: err, Layout: f.plan.layout}
 	}
+	return f.rawImage(pixels, diagnosticCount), nil
+}
+
+func (f *File) rawImage(pixels []uint16, diagnosticCount int) *RawImage {
 	m := f.metadata
 	diagnostics := make([]Diagnostic, diagnosticCount)
 	copy(diagnostics, m.Diagnostics)
@@ -81,5 +85,5 @@ func (f *File) decodeWord(ctx context.Context) (*RawImage, error) {
 		Pixels: pixels, Width: f.plan.width, Height: f.plan.height, Stride: f.plan.width,
 		ActiveArea: m.Geometry.ActiveArea.Value, CFA: f.plan.cfa, BitDepth: f.plan.bits,
 		Calibration: m.Calibration, Orientation: m.Orientation.Value, Diagnostics: diagnostics,
-	}, nil
+	}
 }

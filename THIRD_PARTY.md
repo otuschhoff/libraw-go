@@ -50,6 +50,16 @@ Phase 0 does not approve indiscriminate copying of unrelated components.
 The exporter itself is project-authored glue around LibRaw's API. It does
 not contain a copied native decoder.
 
+The source-informed Go predictive decoder in [legacy.go](legacy.go) adapts
+the algorithm of `olympus_load_raw` and `getbithuff` in the pinned
+`src/decoders/decoders_dcraw.cpp`, whose notices identify copyright 2019-2021
+LibRaw LLC and copyright 1997-2018 Dave Coffin. This adaptation is distributed
+under the project's elected LGPL-2.1-only terms. Its bounded streaming reader,
+explicit signed arithmetic, validation, cancellation, and Go integration are
+documented in the [algorithm contract](docs/orf-layouts.md).
+No native decoder code, library, process, or generated Huffman table is needed
+at production runtime.
+
 ## ExifTool
 
 - Upstream: <https://github.com/exiftool/exiftool>.

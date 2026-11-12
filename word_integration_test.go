@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"image"
 	"io"
 	"os"
@@ -19,6 +20,15 @@ import (
 )
 
 func TestReferenceWordRawSamples(t *testing.T) {
+	testReferenceRawSamples(t, "olympus-word16le-high12", 15_859_904)
+}
+
+func TestReferenceLegacyRawSamples(t *testing.T) {
+	testReferenceRawSamples(t, "olympus-legacy-predictive12", 20_832_000)
+}
+
+func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
+	t.Helper()
 	var manifest struct {
 		Fixtures []struct {
 			ID, SHA256, Layout string
@@ -46,10 +56,7 @@ func TestReferenceWordRawSamples(t *testing.T) {
 	}
 	fixtures, samples := 0, 0
 	for _, fixture := range manifest.Fixtures {
-		if fixture.Layout != "olympus-word16le-high12" {
-			if fixture.Capabilities.ProductionDecode {
-				t.Fatal("only evidenced word layouts may advertise production decoding in Phase 3")
-			}
+		if fixture.Layout != layout {
 			continue
 		}
 		fixtures++
@@ -76,7 +83,7 @@ func TestReferenceWordRawSamples(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !file.Capabilities().Raw.Available || file.Capabilities().Render.Available {
-				t.Fatal("incorrect word capability")
+				t.Fatal("incorrect raw capability")
 			}
 			before := file.Metadata()
 			raw, err := file.DecodeRaw(context.Background())
@@ -133,7 +140,7 @@ func TestReferenceWordRawSamples(t *testing.T) {
 					i := y*raw.Width + x
 					expected := binary.LittleEndian.Uint16(row[x*2:])
 					if raw.Pixels[i] != expected {
-						t.Fatalf("first raw mismatch sample=%d x=%d y=%d strip-row-domain=sensor got=%d want=%d", i, x, y, raw.Pixels[i], expected)
+						t.Fatalf("first raw mismatch layout=%s sample=%d x=%d y=%d coordinate-domain=sensor got=%d want=%d", layout, i, x, y, raw.Pixels[i], expected)
 					}
 					binary.LittleEndian.PutUint16(decodedRow[x*2:], raw.Pixels[i])
 				}
@@ -149,16 +156,40 @@ func TestReferenceWordRawSamples(t *testing.T) {
 				hex.EncodeToString(actualHash.Sum(nil)) != oracle.SamplesSHA256 {
 				t.Fatal("compressed artifact or full sensor sample hash mismatch")
 			}
+			if layout == "olympus-legacy-predictive12" {
+				bits := file.legacyReader(make([]byte, legacyBufferBytes))
+				if err := decodeLegacyRows(context.Background(), &bits, raw.Pixels, raw.Width, raw.Width, raw.Height); err != nil {
+					t.Fatal(err)
+				}
+				expectedBits := map[string]uint64{"olympus-e-410-1173": 77_063_789, "olympus-e-510-5449": 81_447_495}
+				if bits.consumed != expectedBits[fixture.ID] {
+					t.Fatalf("coded bit count=%d want=%d", bits.consumed, expectedBits[fixture.ID])
+				}
+				required := uint64(file.plan.headerBytes) + (bits.consumed+7)/8
+				t.Logf("consumed=%d bits; required strip bytes=%d; opaque trailing bytes=%d; unused last-byte bits=%d",
+					bits.consumed, required, file.plan.strips[0].length-required, (8-bits.consumed%8)%8)
+				boundedFile := *file
+				boundedFile.plan.strips = append([]stripPlan(nil), file.plan.strips...)
+				boundedFile.plan.strips[0].length = required
+				exact, err := boundedFile.DecodeRaw(context.Background())
+				if err != nil || !reflect.DeepEqual(exact.Pixels, raw.Pixels) {
+					t.Fatalf("exactly exhausted stream failed or required lookahead: %v", err)
+				}
+				boundedFile.plan.strips[0].length--
+				if partial, err := boundedFile.DecodeRaw(context.Background()); partial != nil || !errors.Is(err, ErrTruncated) {
+					t.Fatalf("missing final field bits zero-filled or read past strip: %+v %v", partial, err)
+				}
+			}
 			samples += len(raw.Pixels)
 			t.Logf("%d exact sensor samples; sha256=%s", len(raw.Pixels), oracle.SamplesSHA256)
 		})
 	}
-	if fixtures != 2 || samples != 15_859_904 {
-		t.Fatalf("required Phase 3 evidence incomplete: %d fixtures, %d samples", fixtures, samples)
+	if fixtures != 2 || samples != expectedSamples {
+		t.Fatalf("required %s evidence incomplete: %d fixtures, %d samples", layout, fixtures, samples)
 	}
 }
 
-func BenchmarkReferenceWordDecode(b *testing.B) {
+func BenchmarkReferenceDecode(b *testing.B) {
 	var manifest struct {
 		Fixtures []struct{ ID, SHA256, Layout string }
 	}
@@ -168,9 +199,6 @@ func BenchmarkReferenceWordDecode(b *testing.B) {
 		dir = ".cache/fixtures"
 	}
 	for _, fixture := range manifest.Fixtures {
-		if fixture.Layout != "olympus-word16le-high12" {
-			continue
-		}
 		b.Run(fixture.ID, func(b *testing.B) {
 			input, err := os.Open(filepath.Join(dir, fixture.ID+".orf"))
 			if err != nil {

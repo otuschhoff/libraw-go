@@ -205,8 +205,8 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 		}
 		plan.layout = "olympus-legacy-predictive12"
 		plan.headerBytes, plan.bitOrder = 7, "MSB-first"
-		plan.scratchBytes = uint64(plan.width)*8 + 4096
-		return plan, "identified olympus-legacy-predictive12; pixel decoder deferred to Phase 4", nil
+		plan.scratchBytes = legacyBufferBytes
+		return plan, "identified olympus-legacy-predictive12", nil
 	}
 	return plan, "unsupported model/identity, MakerNote variant, or strip layout; no camera-name-only decoder guess", nil
 }

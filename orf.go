@@ -128,7 +128,7 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 	if preview != nil {
 		f.caps.Preview.Reason = ""
 	}
-	if plan.layout == "olympus-word16le-high12" {
+	if plan.layout == "olympus-word16le-high12" || plan.layout == "olympus-legacy-predictive12" {
 		if _, _, _, err := f.rawResources(); err != nil {
 			f.caps.Raw.Reason = err.Error()
 		} else {

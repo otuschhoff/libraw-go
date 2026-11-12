@@ -9,7 +9,8 @@ These are source-informed, LGPL-covered notes, not a clean-room format
 specification. "Measured" below means observed in these exact files or
 compared against every exported sample. "Reference-derived" describes
 behavior read from the pinned implementation, not experimentally established
-for every Olympus model. Future production code still needs its own tests.
+for every Olympus model. The two implemented layouts have their own primitive,
+malformed-input, and full-sample differential tests.
 
 ## 1. Container: measured facts
 
@@ -302,7 +303,7 @@ Neighbors are two raw pixels apart, i.e. same-CFA-position values:
 ### Branch vectors for Phase 4
 
 These are reference-derived arithmetic vectors, not synthetic ORF files.
-Phase 4 must turn them into independent unit tests before decoding real files.
+Phase 4 implements these as independent unit tests alongside full-frame parity.
 
 | Case | Inputs | Expected |
 |---|---|---|
@@ -332,14 +333,51 @@ low-bit combinations, bias accumulation/sign shifts, maximum legal sample,
 negative/overflowing sample rejection, each truncated field, and a bounded
 all-zero malformed prefix.
 
-### Remaining constraints before implementation
+### Phase 4 implementation contract
+
+The pinned decoder source and archive hashes were reverified before
+implementation. The following choices freeze the initial Go algorithm:
+
+- The previous magnitude is retained in full for residual arithmetic, but
+  **only its low 16 bits** participate in suffix-width selection, matching
+  the reference's explicit unsigned-short conversion. Widths are 2..16.
+- Residuals, bias, and predictors use signed 32-bit arithmetic. Negative
+  right shifts are arithmetic in Go; reconstruction uses `4*residual+low`
+  rather than depending on a C signed left shift. The maximum coded
+  magnitude is 786431, so these operations cannot overflow int32.
+- The small-residual count saturates at three: only the predicate `< 3`
+  affects decoding. Both parity contexts reset at every row.
+- A fixed 4096-byte input buffer and the full output plane suffice; no
+  compressed-payload copy or extra predictor rows are needed. Bit fields
+  consume exactly their required MSB-first bits, with no Huffman lookahead,
+  byte stuffing, zero filling, or speculative EOF requirement.
+- All coded columns consume residuals, including columns outside an output
+  rectangle. The current public selector evidences only equal coded/output
+  widths, and always retains the entire stored sensor plane; an active crop
+  does not alter either width.
+- After the final coded sample, unused bits in the last byte and any
+  remaining declared strip bytes are opaque trailing data, not required
+  field bits. Their values are not constrained or scanned. This permits
+  exactly exhausted streams and never extends a read past the declared
+  strip. The input-size quota still bounds the declared extent.
+
+Measured Phase 4 consumption:
+
+| Fixture | Coded bits after header | Required strip bytes including header | Unused final bits | Whole trailing bytes |
+|---|---:|---:|---:|---:|
+| olympus-e-410-1173 | 77063789 | 9632981 | 3 | 0 |
+| olympus-e-510-5449 | 81447495 | 10180944 | 1 | 0 |
+
+Both entire planes match the pinned sample hashes. Tests decode with exactly
+these byte extents and reject removal of the final byte even though the source
+still physically contains it. Synthetic streams additionally test arbitrary
+unused-bit values and declared trailing bytes; neither is a required lookahead.
 
 The physical meaning of the seven-byte header and the full universe of
 trailing-padding patterns are not established by this corpus. No universal
-claim is made. Phase 4 must distinguish actual required field bits from
-lookahead and document its bounded trailing-data policy using these fixtures.
-It must not require a fixed padding value absent evidence, and must never
-read outside declared strip bounds.
+claim is made. The observed header is validated by the layout selector;
+other headers remain unsupported. Required field bits cannot be replaced
+by padding or by bytes physically following the declared strip.
 
 No evidence here supports compressed multi-strip restart rules, alternative
 predictor thresholds, non-12-bit output, or newer parameterized compression.
@@ -359,8 +397,8 @@ unknown. No high-resolution/pixel-shift or ORI input is included.
 
 There are two distinct real files per measured layout but only one per
 camera/mode. Phase 0 therefore establishes initial layout evidence, not the
-design's production camera-certification gate. Phase 3 implements only the
-evidenced word layout; predictive decoding remains deferred to Phase 4.
+design's production camera-certification gate. Phases 3-4 implement the
+evidenced word and legacy predictive layouts with exact full-plane parity.
 
 ## 7. Embedded JPEG evidence (Phase 2)
 

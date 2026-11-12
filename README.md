@@ -2,10 +2,10 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 3 complete: exact sensor-code decoding for the evidenced
-`olympus-word16le-high12` layout, alongside ORF metadata, embedded JPEGs and
-`orfinfo`. Legacy predictive decoding awaits Phase 4; rendering is not
-implemented. Layout coverage is not camera/mode certification or an M1 release.**
+**Current status: Phase 4 complete: exact sensor-code decoding for the evidenced
+`olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
+metadata, embedded JPEGs and `orfinfo`. Rendering is not implemented. Layout
+coverage is not camera/mode certification or an M1 release.**
 
 ## Project decisions
 
@@ -22,6 +22,105 @@ The production module is initialized at the approved path and Go version.
 It depends only on the standard library and builds with `CGO_ENABLED=0`.
 Native tools below remain development-only, with no native or
 external-process production dependency.
+
+## Phase 4: legacy predictive compressed RAW decoding
+
+`DecodeRaw` now also decodes the evidenced E-410/E-510 legacy predictive
+layout. It uses the same caller-owned `RawImage` contract as the word decoder
+below: full unrotated sensor codes, original CFA/calibration domain, and no
+crop, black subtraction, WB, scaling, rendering, or JPEG substitution.
+
+The source-informed algorithm is frozen in the
+[layout notes](docs/orf-layouts.md#phase-4-implementation-contract).
+It validates the known seven-byte prefix through the layout selector, reads
+MSB-first fields without speculative Huffman lookahead, and implements bounded
+unary/escape coding, independent column-parity adaptive state with row resets,
+complement-sign residuals, and same-CFA boundary/interior predictors. Signed
+arithmetic is explicit; reconstructed samples outside 0..4095 are corrupt.
+Every coded column is consumed, even outside a shorter internal output width;
+the public selector only accepts the evidenced equal coded/output-width case.
+
+Full-plane comparison with the unchanged pinned LibRaw 0.21.4 goldens checks
+**20,832,000 predictive samples with zero mismatches**:
+
+| Fixture | Sensor dimensions | Exact samples | Required coded bits | Unused last-byte bits |
+|---|---:|---:|---:|---:|
+| olympus-e-410-1173 | 3720 x 2800 | 10,416,000 | 77,063,789 | 3 |
+| olympus-e-510-5449 | 3720 x 2800 | 10,416,000 | 81,447,495 | 1 |
+
+Both fixtures require all declared strip bytes, but not every bit of the last
+byte. Integration tests also decode with exactly the required byte extent,
+then remove its final byte while leaving those bytes physically readable:
+the latter must return `ErrTruncated`, never a partial image or zero-filled
+success. Synthetic tests permit arbitrary unused bits and opaque trailing
+declared bytes; no universal padding value or header meaning is invented.
+
+Working storage is one output plane, one **4096-byte** input buffer, and
+diagnostic storage: `2*width*height + 4096 + 64*diagnosticCount` accounted bytes.
+No whole compressed strip, extra predictor rows, or second image is allocated.
+Exact working-quota boundaries are checked before allocation/read and reflected
+in capabilities. Calls have independent state, support concurrent `ReaderAt`s,
+and poll cancellation between rows and before success. Error context identifies
+the failing sample's byte/bit position and row/column; underlying I/O errors and
+missing-field positions remain wrapped.
+
+Capabilities indicate an implemented layout within limits, not a guarantee
+that its still-unread payload is valid. `Open` reads only the known raw prefix,
+not the compressed plane. Unsupported headers, camera/mode identities,
+odd coded widths, compressed multi-strip restart schemes, and newer codecs
+remain unsupported. No camera-name-only decoder guess is introduced.
+
+### Phase 4 validation and completion review
+
+```sh
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go vet ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go build ./...
+GOTOOLCHAIN=go1.26.0 go test -race -tags=integration ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz='^FuzzDecodeLegacy$' -fuzztime=90s -fuzzminimizetime=1s -parallel=4 .
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz='^FuzzLegacyRoundTrip$' -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz='^FuzzOpenORF$' -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration -run='^$' -bench=BenchmarkReferenceDecode -benchmem -benchtime=300ms -count=3 .
+```
+
+Re-evaluation covers the reference's low-16-bit width selection, widths 2..16,
+all prefix lengths, zero-width escape fields, discarded escape bits, signed
+bias shifts, small-residual count saturation, all low bits, predictor thresholds
+and tie behavior, row resets/parity independence, ignored coded columns,
+zero/maximum samples, negative/overflow rejection, every truncated field,
+all-zero malformed tails, buffer refills/strip extents, exact working quotas,
+missing calibration/crop, cancellation including the final row, I/O causes,
+concurrent ownership, and allocation counts independent of row/sample count.
+The existing word/metadata/preview behavior remains covered by the same suite.
+All **36,691,904** required word-plus-predictive sensor samples match their
+pinned oracles.
+
+Final local validation (Go 1.26.0, macOS/arm64):
+
+- Integration tests, race-enabled integration tests, vet and CGO-disabled builds
+  pass. All new predictive decoder functions have **100% statement coverage**;
+  aggregate instrumented coverage is **89.7%**.
+- Malformed predictive fuzzing: **6,880,860 executions in 90 seconds**.
+  Arbitrary valid-plane round trips: **3,655,514 in 60 seconds**.
+  Full parser/decode fuzzing: **4,654,052 in 60 seconds**. No failures.
+- Linux/386 integration tests cross-compile with `go test -exec=true`, not
+  runtime execution. Linux/amd64, Linux/arm64 and macOS/amd64 packages build.
+  Production dependencies remain standard-library-only and CGO-disabled.
+- Standalone reference-tool tests and all four original fixture/artifact/
+  layout/sample-hash integrity checks pass without changing the goldens.
+
+Three 300ms benchmark repeats on Apple M1 Max (each predictive iteration exceeds
+300ms, so each repeat measures one full decode) recorded:
+
+| Fixture | Time/decode | Throughput | Go-reported B/op | Allocations/op |
+|---|---:|---:|---:|---:|
+| E-410, 3720 x 2800 | 377-381 ms | 27.37-27.62 MP/s | 20,836,864 | 4 |
+| E-510, 3720 x 2800 | 393-397 ms | 26.28-26.48 MP/s | 20,836,864 | 4 |
+
+These are local observations, not machine-independent performance promises.
+Repeated completeness review leaves no outstanding Phase 4 findings.
+M1 release hardening, longer fuzz gates, and broader platform/camera
+certification remain Phase 5, not a claim of this phase.
 
 ## Phase 3: evidenced word-based RAW decoding
 
@@ -67,11 +166,11 @@ presence/provenance and does not prevent raw extraction.
 
 ### Capabilities, limits and failure behavior
 
-`Capabilities.Raw.Available` is true only for the evidenced word selector when
+`Capabilities.Raw.Available` is true for an implemented evidenced selector when
 its decode buffers fit the resolved limits. It does not merely test the camera
 name or nominal bit depth. `orfinfo` reports this automatically without decoding
-the image. Predictive/newer codecs and unsupported organizations return
-`ErrUnsupported`; an identified word layout exceeding its working quota instead
+the image. Newer codecs and unsupported organizations return
+`ErrUnsupported`; an implemented layout exceeding its working quota instead
 returns `ErrLimitExceeded`, with an explanatory unavailable capability reason.
 Rendering remains unavailable for every file.
 
@@ -106,7 +205,7 @@ GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go build ./...
 GOTOOLCHAIN=go1.26.0 go test -race -tags=integration ./...
 GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz=FuzzDecodeWord -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
 GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz=FuzzOpenORF -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
-GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration -run='^$' -bench=BenchmarkReferenceWordDecode -benchmem -count=3 .
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration -run='^$' -bench=BenchmarkReferenceDecode -benchmem -count=3 .
 ```
 
 The integration workflow uses the licensed originals fetched by the
@@ -147,7 +246,7 @@ repeats with the fixed input hashes in the manifest measured:
 These are local baseline observations, not machine-independent performance
 promises. Allocation count is independent of row/strip count; a regression test
 guards this property. The Phase 3 gate is complete with no outstanding findings;
-Phase 4 predictive decoding and Phase 5 release/hardening gates remain separate.
+Phase 4 is documented above, and Phase 5 release/hardening remains separate.
 
 ## Phase 2: ORF metadata and embedded previews
 
@@ -207,8 +306,8 @@ Safely parsed unsupported models, modes, tiled organizations, reordered/gapped
 strips, or newer codecs can still expose metadata/previews. No camera-name-only,
 file-size-only, or nominal-bit-depth-only decoder guess is made. Logical strip
 order is preserved even when that organization cannot select an initial plan.
-Phase 2 introduced metadata-only plans. Phase 3 now enables RAW only for the
-word layout above; predictive/newer codecs still return `ErrUnsupported`.
+Phase 2 introduced metadata-only plans. Phases 3-4 now enable RAW for both
+evidenced layouts above; newer codecs still return `ErrUnsupported`.
 `.Render.Available` remains false, and RAW never substitutes a JPEG.
 
 White level, firmware, and camera-to-XYZ transforms remain explicitly unavailable
@@ -299,8 +398,8 @@ Final validation on macOS/arm64:
 
 The Phase 2 gate covers only parsing/planning and preview extraction.
 Two fixtures per initial layout are evidence, not camera/mode certification:
-there is still only one file per camera. Phase 3 adds word sample parity;
-predictive sample parity and M1 release gates remain for Phases 4-5.
+there is still only one file per camera. Phases 3-4 add word/predictive sample
+parity; M1 release gates remain for Phase 5.
 
 ## Phase 1 contracts
 
@@ -342,7 +441,7 @@ checks. A lowered working-buffer budget must still cover the resolved
 metadata and preview limits, and resolved depth must not exceed the IFD quota.
 
 `Open`/`File` now implement the borrowed-input and ownership contracts described
-above. `RawImage` is now produced for the evidenced word layout; `DecodeRaw`
+above. `RawImage` is now produced for both evidenced layouts; `DecodeRaw`
 explicitly reports unsupported remaining layouts rather than fabricating pixels
 or preview fallbacks. No `Render` implementation is exposed before Phase 6.
 
@@ -471,8 +570,8 @@ committed index. It never rewrites expected results.
 
 Initial evidence covers E-1/E-400 little-endian word storage and E-410/E-510
 legacy predictive storage. There is only one photograph per camera, so this
-is layout implementation evidence, **not camera certification**. The word
-layout now decodes; legacy predictive storage remains planned for Phase 4.
+is layout implementation evidence, **not camera certification**. Both layouts
+now decode with exact full-plane sample parity.
 The design's two-fixtures-per-advertised-camera/mode release gate still
 applies. Newer 12/14-bit codecs, other ORF signatures, packed formats,
 high-resolution modes, ORI, and multi-frame reconstruction remain deferred.

@@ -171,7 +171,7 @@ func TestReferenceFixtureMetadataAndPreviews(t *testing.T) {
 				t.Fatalf("Open/Preview over-read raw payload or materialized excess data: %v, %d bytes", spy.err, spy.bytes)
 			}
 			caps := file.Capabilities()
-			if !caps.Metadata.Available || !caps.Preview.Available || caps.Raw.Available != word || caps.Render.Available {
+			if !caps.Metadata.Available || !caps.Preview.Available || !caps.Raw.Available || caps.Render.Available {
 				t.Fatalf("incorrect capability report: %+v", caps)
 			}
 		})

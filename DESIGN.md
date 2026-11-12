@@ -5,8 +5,9 @@ are recorded in [the Phase 0 report](docs/phase0.md). Phase 1's module,
 contracts, and bounded primitives are described in [README](README.md).
 Phase 2 implements bounded ORF metadata, layout plans, JPEG extraction, and
 the diagnostic CLI. Phase 3 implements the evidenced word16le-high12 sensor
-decoder with exact sample parity. Predictive decoding (Phase 4), rendering,
-M1 release hardening and camera certification remain later gates.
+decoder with exact sample parity. Phase 4 implements the evidenced legacy
+predictive decoder with exact sample parity. Rendering, M1 release hardening
+and camera certification remain later gates.
 
 ## 1. Objective
 
@@ -661,7 +662,7 @@ bytes; metadata-only unsupported ORFs never claim RAW capability.
 surface. Only evidenced `IIRO` framing and the old `OLYMP` / new little-endian
 `OLYMPUS` MakerNotes are parsed. `IIRS` and `MMOR` report unsupported;
 ordinary TIFF is not ORF. Layout IDs identify validated plans independently
-of decoder availability; Phase 3 enables only the word plan. JPEG selection
+of decoder availability; Phases 3-4 enable the two evidenced plans. JPEG selection
 inspects bounded frame headers and
 terminal markers without decoding entropy/pixels; extraction returns exact
 embedded bytes. Unverified Olympus preview orientation remains unavailable.
@@ -684,8 +685,8 @@ strip organizations are rejected rather than concatenated speculatively.
 **Implementation status:** complete. The only initially evidenced word/packed
 layout is `olympus-word16le-high12`; no unevidenced packed decoder was invented.
 Every E-1/E-400 golden sensor sample matches (15,859,904 total). Word RAW
-capabilities reflect implementation and working limits; predictive capabilities
-remain unavailable. One output plane, one row and caller-owned diagnostics are
+capabilities reflect implementation and working limits; Phase 4 adds predictive
+decoding below. One output plane, one row and caller-owned diagnostics are
 allocated, with cancellation/error/ownership and exact quota tests. See
 [README](README.md) for executable gates, repeated review results, performance
 baselines and the distinction between layout parity and camera certification.
@@ -706,6 +707,20 @@ baselines and the distinction between layout parity and camera certification.
 **Gate:** every required legacy compressed fixture has zero meaningful-sample
 differences; malformed streams terminate; geometry and CFA match; missing
 data cannot decode through zero-filled lookahead.
+
+**Implementation status:** complete. Both E-410/E-510 fixtures match every
+stored sensor sample (20,832,000 total), including margins. The frozen
+[algorithm contract](docs/orf-layouts.md#phase-4-implementation-contract)
+specifies low-16-bit adaptive width selection, signed arithmetic, bounded
+prefixes/escapes, parity/row state, predictors, and opaque trailing-data policy.
+The decoder uses one output plane plus a 4096-byte input buffer and diagnostics.
+Tests cover predictor branches, all field truncations, ignored coded columns,
+exact resource/capability boundaries, cancellation, ownership, concurrency,
+and row-independent allocation counts. Real fixtures decode with exactly
+exhausted strip extents and fail when their final required byte is removed,
+even with the omitted bytes still physically readable. All 36,691,904 samples
+across both layouts match the pinned oracles. See [README](README.md) for
+validation commands, measured results, and remaining support boundaries.
 
 ### Phase 5: M1 hardening and raw-decode release
 
