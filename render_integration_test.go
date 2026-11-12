@@ -87,9 +87,16 @@ func TestReferenceRendering(t *testing.T) {
 			}
 			opts := RenderOptions{AllowEstimatedWhite: estimated}
 			baseline, exists := byID[fixture.ID]
-			if !exists || baseline.InputSHA256 != fixture.SHA256 ||
-				!reflect.DeepEqual(baseline.Metadata, file.Metadata()) || baseline.Options != opts {
-				t.Fatal("frozen rendering metadata, calibration, options or input binding changed")
+			if !exists || baseline.InputSHA256 != fixture.SHA256 || baseline.Options != opts {
+				t.Fatal("frozen rendering options or input binding changed")
+			}
+			metadata := file.Metadata()
+			if !renderMetadataEqual(metadata, baseline.Metadata) {
+				t.Fatalf("frozen metadata/calibration changed:\ncurrent=%+v\nfrozen=%+v", metadata, baseline.Metadata)
+			}
+			if metadata.Calibration.Color.Value.CameraToXYZ != baseline.Metadata.Calibration.Color.Value.CameraToXYZ {
+				t.Logf("profile matrix roundoff within 1e-6: current=%.17g frozen=%.17g",
+					metadata.Calibration.Color.Value.CameraToXYZ, baseline.Metadata.Calibration.Color.Value.CameraToXYZ)
 			}
 			out, err := Render(context.Background(), raw, opts)
 			if err != nil {
@@ -152,6 +159,61 @@ type renderBaseline struct {
 	PNGBytes     int64  `json:"png_bytes"`
 	PNGSHA256    string `json:"png_sha256"`
 	PixelsSHA256 string `json:"nrgba64_sha256"`
+}
+
+func renderMetadataEqual(got, want Metadata) bool {
+	if got.Calibration.Color.Origin == OriginProfile && want.Calibration.Color.Origin == OriginProfile {
+		for i := range 3 {
+			for j := range 3 {
+				a, b := got.Calibration.Color.Value.CameraToXYZ[i][j], want.Calibration.Color.Value.CameraToXYZ[i][j]
+				if !finite(a) || !finite(b) || math.Abs(a-b) > 1e-6 {
+					return false
+				}
+			}
+		}
+		got.Calibration.Color.Value.CameraToXYZ = want.Calibration.Color.Value.CameraToXYZ
+	}
+	return reflect.DeepEqual(got, want)
+}
+
+func TestFrozenRenderMetadataTolerance(t *testing.T) {
+	want := Metadata{NormalizedModel: "E-410", Calibration: Calibration{
+		Color: Value[ColorTransform]{Origin: OriginProfile, Source: "approved-profile"},
+	}}
+	for _, test := range []struct {
+		name   string
+		mutate func(*Metadata)
+		equal  bool
+	}{
+		{"unchanged", func(*Metadata) {}, true},
+		{"last bit", func(m *Metadata) { m.Calibration.Color.Value.CameraToXYZ[0][0] = math.SmallestNonzeroFloat64 }, true},
+		{"positive bound", func(m *Metadata) { m.Calibration.Color.Value.CameraToXYZ[0][0] = 1e-6 }, true},
+		{"negative bound", func(m *Metadata) { m.Calibration.Color.Value.CameraToXYZ[2][2] = -1e-6 }, true},
+		{"over bound", func(m *Metadata) { m.Calibration.Color.Value.CameraToXYZ[0][0] = math.Nextafter(1e-6, math.Inf(1)) }, false},
+		{"nan", func(m *Metadata) { m.Calibration.Color.Value.CameraToXYZ[1][1] = math.NaN() }, false},
+		{"infinity", func(m *Metadata) { m.Calibration.Color.Value.CameraToXYZ[1][1] = math.Inf(1) }, false},
+		{"origin", func(m *Metadata) { m.Calibration.Color.Origin = OriginFile }, false},
+		{"source", func(m *Metadata) { m.Calibration.Color.Source = "other" }, false},
+		{"model", func(m *Metadata) { m.NormalizedModel = "other" }, false},
+		{"geometry", func(m *Metadata) { m.Geometry.Width++ }, false},
+		{"reference white", func(m *Metadata) { m.Calibration.Color.Value.ReferenceWhite[0] = math.SmallestNonzeroFloat64 }, false},
+		{"file value", func(m *Metadata) { m.ExposureTime.Value = math.SmallestNonzeroFloat64 }, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := want.Clone()
+			test.mutate(&got)
+			if renderMetadataEqual(got, want) != test.equal {
+				t.Fatal("frozen metadata tolerance or exact provenance/field binding violated")
+			}
+		})
+	}
+	fileValue := want.Clone()
+	fileValue.Calibration.Color.Origin = OriginFile
+	changed := fileValue.Clone()
+	changed.Calibration.Color.Value.CameraToXYZ[0][0] = math.SmallestNonzeroFloat64
+	if renderMetadataEqual(changed, fileValue) {
+		t.Fatal("file-supplied values must remain exact, not acquire a derived-profile tolerance")
+	}
 }
 
 func compareRenderedBaseline(t *testing.T, got *image.NRGBA64, baseline renderBaseline) {

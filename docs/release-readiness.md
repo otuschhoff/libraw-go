@@ -175,7 +175,10 @@ reproduction remains the opt-in workflow in [the reference guide](../tools/refer
 Recorded renderer hashes describe the code used to freeze the baseline; they
 are not a requirement that every later behavior-preserving refactor rewrite
 the PNGs. Integration compares current parsed metadata/options with the frozen
-case and current pixels with the baseline. The offline verifier validates
+case and current pixels with the baseline. Derived profile camera-to-XYZ
+coefficients use the existing `1e-6` absolute stage tolerance for architecture
+roundoff; all other metadata, calibration provenance and options remain exact.
+The offline verifier validates
 image bytes/pixels, source bindings, licenses, coverage and index structure.
 
 The PNG photographs remain CC0-1.0, while the metadata index, LibRaw-derived
@@ -265,4 +268,12 @@ The public archive was rechecked during Phase 7; only the same approved sample
 per model was available. No replacement or second photo was fabricated,
 downloaded without permission, or counted through a mirror. Repeated engineering
 review resolved license/schema, complete-pixel, ReaderAt, output-publication and
-fixture-count findings; the external fixture gate remains deliberately open.
+fixture-count findings. Native amd64 CI also exposed an over-strict bit-exact
+comparison of derived profile coefficients: the regression harness now applies
+the documented numerical tolerance, with exact-boundary/nonfinite tests and
+unchanged full-image one-code limits. Production code and frozen PNGs were not
+changed to hide architecture roundoff. A local emulated Linux/amd64 execution
+reproduced the failure, then passed all full-image/parity tests with zero RGB
+differences after this harness correction; observed coefficient differences
+were at most `4.45e-16`. This is executed emulation, not a native runner claim.
+The external fixture gate remains open.
