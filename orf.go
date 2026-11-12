@@ -114,6 +114,9 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 	if plan.layout != "" {
 		p.metadata.Layout = Value[string]{Value: plan.layout, Origin: OriginProfile, Source: "phase0/evidenced-layout-selector"}
 	}
+	if err := p.applyProfile(plan); err != nil {
+		return nil, err
+	}
 	preview, err := p.selectPreview()
 	if err != nil {
 		return nil, err
@@ -122,7 +125,7 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 	f.caps = Capabilities{
 		Metadata: Capability{Available: true},
 		Raw:      Capability{Reason: reason},
-		Render:   Capability{Reason: "rendering is not implemented (Phase 6)"},
+		Render:   Capability{Reason: "RAW decoding unavailable"},
 		Preview:  Capability{Available: preview != nil, Reason: "no validated JPEG preview within configured limits"},
 	}
 	if preview != nil {
@@ -133,6 +136,16 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 			f.caps.Raw.Reason = err.Error()
 		} else {
 			f.caps.Raw = Capability{Available: true}
+		}
+	}
+	if f.caps.Raw.Available {
+		raw := &RawImage{Width: plan.width, Height: plan.height, Stride: plan.width, BitDepth: plan.bits,
+			ActiveArea: p.metadata.Geometry.ActiveArea.Value, CFA: plan.cfa,
+			Calibration: p.metadata.Calibration, Orientation: p.metadata.Orientation.Value}
+		if _, err := makeRenderPlan(raw, RenderOptions{Limits: limits}, false); err != nil {
+			f.caps.Render.Reason = err.Error()
+		} else {
+			f.caps.Render = Capability{Available: true}
 		}
 	}
 	return f, nil
@@ -515,14 +528,6 @@ func (p *parser) finishCalibration() error {
 			}
 			m.Calibration.WhiteBalance = fileValue(wb, "Olympus/WB_RBLevels / 256")
 		}
-	}
-	// The phase-zero maxima and transforms may come from LibRaw camera tables.
-	// Do not label those as per-file calibration or invent a generic transform.
-	if !m.Calibration.White.Present() {
-		p.diagnostic("white-level-unavailable", "no verified per-file white level or approved production profile", "calibration")
-	}
-	if !m.Calibration.Color.Present() {
-		p.diagnostic("color-transform-unavailable", "MakerNote matrices have not been verified as camera RGB to XYZ", "calibration")
 	}
 	if p.cameraID != "" {
 		m.CameraID = fileValue(p.cameraID, "Olympus/Equipment/0x0100")

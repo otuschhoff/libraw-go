@@ -82,7 +82,7 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !file.Capabilities().Raw.Available || file.Capabilities().Render.Available {
+			if !file.Capabilities().Raw.Available || file.Capabilities().Render.Available != (layout == "olympus-legacy-predictive12") {
 				t.Fatal("incorrect raw capability")
 			}
 			before := file.Metadata()
@@ -192,14 +192,18 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 }
 
 func BenchmarkReferenceDecode(b *testing.B) {
-	benchmarkReferenceOperation(b, true)
+	benchmarkReferenceOperation(b, "decode")
 }
 
 func BenchmarkReferenceOpen(b *testing.B) {
-	benchmarkReferenceOperation(b, false)
+	benchmarkReferenceOperation(b, "open")
 }
 
-func benchmarkReferenceOperation(b *testing.B, decode bool) {
+func BenchmarkReferenceRender(b *testing.B) {
+	benchmarkReferenceOperation(b, "render")
+}
+
+func benchmarkReferenceOperation(b *testing.B, operation string) {
 	b.Helper()
 	var manifest struct {
 		Fixtures []struct{ ID, SHA256, Layout string }
@@ -229,24 +233,41 @@ func benchmarkReferenceOperation(b *testing.B, decode bool) {
 				b.Fatal(err)
 			}
 			b.Logf("input_sha256=%s dimensions=%dx%d", fixture.SHA256, file.plan.width, file.plan.height)
+			var raw *RawImage
+			pixels := file.plan.width * file.plan.height
+			if operation == "render" {
+				raw, err = file.DecodeRaw(context.Background())
+				if err != nil {
+					b.Fatal(err)
+				}
+				pixels = raw.ActiveArea.Dx() * raw.ActiveArea.Dy()
+				b.Logf("render_crop=%v exif_orientation=%d", raw.ActiveArea, raw.Orientation)
+			}
 			b.ReportAllocs()
-			if decode {
+			if operation == "decode" {
 				b.SetBytes(int64(file.plan.outputBytes))
+			} else if operation == "render" {
+				b.SetBytes(int64(pixels) * 8)
 			}
 			b.ResetTimer()
 			for b.Loop() {
-				if decode {
+				switch operation {
+				case "decode":
 					if _, err := file.DecodeRaw(context.Background()); err != nil {
 						b.Fatal(err)
 					}
-				} else {
+				case "render":
+					if _, err := Render(context.Background(), raw, RenderOptions{AllowEstimatedWhite: true}); err != nil {
+						b.Fatal(err)
+					}
+				case "open":
 					if _, err := Open(input, info.Size(), OpenOptions{}); err != nil {
 						b.Fatal(err)
 					}
 				}
 			}
-			if decode {
-				b.ReportMetric(float64(file.plan.width*file.plan.height)*float64(b.N)/b.Elapsed().Seconds()/1e6, "MP/s")
+			if operation != "open" {
+				b.ReportMetric(float64(pixels)*float64(b.N)/b.Elapsed().Seconds()/1e6, "MP/s")
 			}
 		})
 	}

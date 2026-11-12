@@ -60,6 +60,25 @@ documented in the [algorithm contract](docs/orf-layouts.md).
 No native decoder code, library, process, or generated Huffman table is needed
 at production runtime.
 
+### Phase 6 camera profiles and color conventions
+
+On 2026-11-12 the owner explicitly approved LibRaw-derived profiles only for
+the four evidenced camera/identity/mode/layout/geometry combinations.
+[profiles.go](profiles.go) uses the E-1/E-400/E-410/E-510 coefficients from the
+pinned `src/tables/colordata.cpp`, copyright 2019-2021 LibRaw LLC with the
+distribution's Dave Coffin attribution. The elected LGPL-2.1-only terms apply.
+The XYZ-to-camera direction, D65 normalization and inversion are verified
+against `cam_xyz_coeff` in `src/utils/utils_dcraw.cpp` and the exported
+reference observations, not guessed from a MakerNote matrix.
+
+[color.go](color.go) uses explicit standard sRGB/XYZ and Bradford conventions.
+The [rendering report](docs/rendering.md) records matrix equations, exact
+source-file hashes, provenance and tests. The E-410/E-510 saturation 3946 comes
+from the profile table. E-1/E-400's 4095 is only the bit-depth reference default,
+marked as an estimate requiring caller permission. No per-file black/WB
+observations are promoted into generic camera tables, and no camera
+certification, native runtime dependency or illuminant interpolation is implied.
+
 ## ExifTool
 
 - Upstream: <https://github.com/exiftool/exiftool>.

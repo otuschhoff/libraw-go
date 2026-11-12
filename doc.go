@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-only
 
 // Package libraw provides bounded, pure-Go Olympus ORF metadata, previews,
-// and evidenced word-layout and legacy predictive raw sensor decoding.
+// evidenced word-layout and legacy predictive raw sensor decoding, and basic
+// calibrated Bayer development to opaque sRGB NRGBA64.
 //
 // Phases 3-4 decode olympus-word16le-high12 and olympus-legacy-predictive12
 // using validated IIRO and Olympus MakerNote evidence. Other raw layouts return
 // ErrUnsupported; an identified layout alone does not imply decoding capability.
-// Rendering is not implemented.
+// Render independently requires verified calibration/crop or explicit overrides.
+// Approved fixture-mode profiles supplement file calibration; bit-depth white
+// estimates require explicit consent. This is not universal camera support.
 // Sensor samples are unprocessed codes, never an embedded preview or values
 // scaled to fill uint16. Geometry is in unrotated sensor coordinates.
 //

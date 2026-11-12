@@ -2,9 +2,10 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 5 / M1 raw-decoding hardening: exact sensor-code decoding for the evidenced
+**Current status: Phase 6 calibrated deterministic development, plus exact sensor-code decoding for the evidenced
 `olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
-metadata, embedded JPEGs and `orfinfo`. Rendering is not implemented. This is a
+metadata, embedded JPEGs and `orfinfo`. Basic independent sRGB rendering is
+implemented for explicitly calibrated Bayer images. This is a
 layout-scoped source milestone, not camera/mode certification or a tagged
 release. See the [M1 support and validation contract](docs/m1.md).**
 
@@ -23,6 +24,28 @@ The production module is initialized at the approved path and Go version.
 It depends only on the standard library and builds with `CGO_ENABLED=0`.
 Native tools below remain development-only, with no native or
 external-process production dependency.
+
+## Phase 6: calibration and deterministic development
+
+`Render(ctx, raw, RenderOptions)` returns an opaque `image.NRGBA64` through
+sensor-position black/white normalization, explicit/as-shot WB, bilinear Bayer
+demosaic, verified camera-to-XYZ conversion, Bradford white adaptation when
+needed, linear exposure, sRGB encoding and all eight EXIF orientations.
+It never changes RAW data or options and allocates only its output plus three
+normalized Bayer rows.
+
+Four owner-approved, narrowly scoped LibRaw-derived profiles fill missing
+white/color data without overriding file calibration. E-410/E-510 have explicit
+profile saturation; E-1/E-400's bit-depth maximum is marked as an **estimate**
+and requires `AllowEstimatedWhite` or an explicit white override.
+RAW and default render capabilities are advertised independently.
+
+The [rendering contract](docs/rendering.md) specifies options, matrix direction,
+reference white, profile provenance/scope, equations, limits, cancellation,
+tiny-image policy and validation. Missing calibration/crop never causes a
+generic color or whole-sensor fallback. Crops smaller than 2x2 return a typed
+unsupported error. Phase 7 remains the combined M1+M2 release gate; camera
+certification is not claimed.
 
 ## Phase 5: M1 hardening and release validation
 
@@ -477,7 +500,8 @@ metadata and preview limits, and resolved depth must not exceed the IFD quota.
 `Open`/`File` now implement the borrowed-input and ownership contracts described
 above. `RawImage` is now produced for both evidenced layouts; `DecodeRaw`
 explicitly reports unsupported remaining layouts rather than fabricating pixels
-or preview fallbacks. No `Render` implementation is exposed before Phase 6.
+or preview fallbacks. Phase 6 now exposes the separate calibrated `Render`
+operation described above, without changing the sensor-code contract.
 
 ### Internal primitives
 

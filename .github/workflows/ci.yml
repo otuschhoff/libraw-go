@@ -1,4 +1,4 @@
-name: M1 validation
+name: ORF validation
 
 on:
   push:
@@ -83,6 +83,8 @@ jobs:
             target: FuzzLegacyRoundTrip
           - package: ./internal/tiff
             target: FuzzReadIFD
+          - package: .
+            target: FuzzRender
     env:
       CGO_ENABLED: "0"
       GOTOOLCHAIN: local

@@ -118,8 +118,11 @@ func TestReferenceFixtureMetadataAndPreviews(t *testing.T) {
 			}
 			if m.BitDepth.Value != 12 || m.BitDepth.Origin != OriginFile || int(m.Orientation.Value) != int(number("IFD0:Orientation")) ||
 				strings.TrimSpace(m.Software.Value) != text("IFD0:Software") || m.Firmware.Present() ||
-				m.Calibration.White.Present() || m.Calibration.Color.Present() {
-				t.Fatal("bit depth, orientation, software, or unavailable calibration differs")
+				!m.Calibration.White.Present() || m.Calibration.Color.Origin != OriginProfile {
+				t.Fatal("bit depth, orientation, software, or profile calibration differs")
+			}
+			if (word && m.Calibration.White.Origin != OriginEstimate) || (!word && m.Calibration.White.Origin != OriginProfile) {
+				t.Fatal("estimated versus profile saturation provenance differs")
 			}
 			cfa := parseOracleNumbers(t, text("ExifIFD:CFAPattern"))[2:]
 			black := parseOracleNumbers(t, text("Olympus:BlackLevel2"))
@@ -171,7 +174,7 @@ func TestReferenceFixtureMetadataAndPreviews(t *testing.T) {
 				t.Fatalf("Open/Preview over-read raw payload or materialized excess data: %v, %d bytes", spy.err, spy.bytes)
 			}
 			caps := file.Capabilities()
-			if !caps.Metadata.Available || !caps.Preview.Available || !caps.Raw.Available || caps.Render.Available {
+			if !caps.Metadata.Available || !caps.Preview.Available || !caps.Raw.Available || caps.Render.Available == word {
 				t.Fatalf("incorrect capability report: %+v", caps)
 			}
 		})

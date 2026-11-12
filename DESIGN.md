@@ -8,8 +8,9 @@ the diagnostic CLI. Phase 3 implements the evidenced word16le-high12 sensor
 decoder with exact sample parity. Phase 4 implements the evidenced legacy
 predictive decoder with exact sample parity. Phase 5 adds M1 raw-decoding
 hardening, long fuzz gates, portable CI and release documentation, recorded in
-the [M1 report](docs/m1.md). Rendering and camera certification remain later
-gates; no release tag is implied.
+the [M1 report](docs/m1.md). The combined M1+M2 release and camera certification remain later
+gates; no release tag is implied. Phase 6 implements calibrated deterministic
+development and approved fixture-mode profiles; see [rendering](docs/rendering.md).
 
 ## 1. Objective
 
@@ -770,6 +771,18 @@ measurements and remaining certification/rendering limitations.
 **Gate:** stage tests meet stated tolerances; four CFA origins, all eight
 orientations, borders, and tiny images pass; no render option mutates RAW;
 render support is advertised separately from decode support.
+
+**Implementation status:** implemented with owner-approved profiles scoped to
+the four evidenced identity/mode/layout/geometry combinations. Per-file
+calibration takes precedence; E-1/E-400 bit-depth white defaults remain explicit
+estimates requiring permission, not measured profile saturation. `Render`
+implements the stated stages with bounded three-row scratch, no RAW/options
+mutation and separate render capability. Owner-approved tiny-image policy
+rejects crops under 2x2 rather than inventing missing channels or borrowing
+outside-crop sites. Independent equations, all CFA phases/orientations,
+full-fixture rendering probes, quotas, cancellation and ownership are tested.
+See the [rendering contract](docs/rendering.md) for precise conventions and
+validation. Phase 7's combined release/certification is not implied.
 
 ### Phase 7: M2 usable release
 

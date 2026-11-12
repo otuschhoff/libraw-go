@@ -57,8 +57,9 @@ const (
 // Levels contains sensor-code levels indexed by raw CFA position [y][x].
 type Levels [2][2]float64
 
-// ColorTransform explicitly describes linear camera RGB to XYZ. ReferenceWhite
-// is XYZ normalized to Y=1. Rows are output XYZ; columns are input RGB.
+// ColorTransform explicitly describes white-balanced linear camera RGB to XYZ.
+// ReferenceWhite is XYZ normalized to Y=1. Rows are output XYZ; columns are
+// input RGB. Render adapts non-D65 reference whites using Bradford adaptation.
 // No MakerNote matrix may be assigned here without establishing its semantics.
 type ColorTransform struct {
 	CameraToXYZ    [3][3]float64
