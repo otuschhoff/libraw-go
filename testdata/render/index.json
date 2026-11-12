@@ -1,0 +1,1187 @@
+{
+  "schema_version": 1,
+  "image_license": "CC0-1.0",
+  "metadata_license": "LGPL-2.1-only",
+  "generator": "libraw-go-render-v1",
+  "go_version": "go1.26.0",
+  "platform": "darwin/arm64",
+  "raw_index_sha256": "eecc799929a91e9e68c5243a890357addbba130547e362d25cf129a71d8f0991",
+  "provenance_sha256": "7f66fbd2ff8a13e3087ea9bf4cc9faa2bbbf823123af2a835f21e2fbed3d6b0c",
+  "renderer_sources_sha256": {
+    "color.go": "0b32a0881662ab116cf09ba1ae11baf23300fbcda34c41f7efe2e20cd7a1f29e",
+    "profiles.go": "a504b7a54a39ffb5443e058f1a1107475ec351b0d58b93405236dd71a27298a9",
+    "render.go": "392073c82a942720771446db95516d2c4a3e1536e6c4bfdf3c46680d85f46333"
+  },
+  "cases": [
+    {
+      "id": "olympus-e-1-1800",
+      "archive_id": 1800,
+      "input_sha256": "042286653fbae5b085bef4a4e626145385ea6e82e817f166b4904abcef64457c",
+      "raw_samples_sha256": "48a755038aa94760a34f2e6dcededd882224a332ce6de5bd813b0b74fa7e72f3",
+      "metadata": {
+        "Make": "OLYMPUS CORPORATION    ",
+        "Model": "E-1             ",
+        "NormalizedMake": "Olympus",
+        "NormalizedModel": "E-1",
+        "CameraID": {
+          "Value": "D4040",
+          "Origin": 1,
+          "Source": "Olympus/Equipment/0x0100"
+        },
+        "Firmware": {
+          "Value": "",
+          "Origin": 0,
+          "Source": ""
+        },
+        "Software": {
+          "Value": "Version 1.1                    ",
+          "Origin": 1,
+          "Source": "IFD/0x0131"
+        },
+        "Layout": {
+          "Value": "olympus-word16le-high12",
+          "Origin": 2,
+          "Source": "phase0/evidenced-layout-selector"
+        },
+        "CaptureMode": {
+          "Value": "SpecialMode=0 0 0;DriveMode=0 0",
+          "Origin": 1,
+          "Source": "Olympus/SpecialMode;CameraSettings/DriveMode"
+        },
+        "Geometry": {
+          "StoredWidth": 2624,
+          "StoredHeight": 1966,
+          "Width": 2624,
+          "Height": 1966,
+          "ActiveArea": {
+            "Value": {
+              "Min": {
+                "X": 36,
+                "Y": 34
+              },
+              "Max": {
+                "X": 2596,
+                "Y": 1954
+              }
+            },
+            "Origin": 1,
+            "Source": "Olympus/ImageProcessing/0x0612..0x0615"
+          }
+        },
+        "CFA": {
+          "Value": [
+            [
+              2,
+              1
+            ],
+            [
+              3,
+              4
+            ]
+          ],
+          "Origin": 1,
+          "Source": "EXIF/0xa302"
+        },
+        "BitDepth": {
+          "Value": 12,
+          "Origin": 1,
+          "Source": "Olympus/ValidBits"
+        },
+        "Orientation": {
+          "Value": 1,
+          "Origin": 1,
+          "Source": "IFD/0x0112"
+        },
+        "ExposureTime": {
+          "Value": 0.005,
+          "Origin": 1,
+          "Source": "EXIF/0x829a"
+        },
+        "FNumber": {
+          "Value": 6.3,
+          "Origin": 1,
+          "Source": "EXIF/0x829d"
+        },
+        "ISO": {
+          "Value": 100,
+          "Origin": 1,
+          "Source": "EXIF/0x8827"
+        },
+        "FocalLength": {
+          "Value": 14,
+          "Origin": 1,
+          "Source": "EXIF/0x920a"
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                65,
+                65
+              ],
+              [
+                65,
+                65
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/BlackLevel (R,G1,G2,B)"
+          },
+          "White": {
+            "Value": [
+              [
+                4095,
+                4095
+              ],
+              [
+                4095,
+                4095
+              ]
+            ],
+            "Origin": 3,
+            "Source": "LibRaw-0.21.4/E-1/fixture-mode-profile/12-bit-default-not-measured"
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                1,
+                1.6875
+              ],
+              [
+                1.1171875,
+                1
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/WB_RBLevels / 256"
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0.5650370862531057,
+                  0.3009882489709021,
+                  0.08444466477599213
+                ],
+                [
+                  0.24584141884801158,
+                  0.8080239541370913,
+                  -0.053865372985102834
+                ],
+                [
+                  0.06156620534898829,
+                  -0.30300896921465703,
+                  1.3302727638656684
+                ]
+              ],
+              "ReferenceWhite": [
+                0.95047,
+                1,
+                1.08883
+              ]
+            },
+            "Origin": 2,
+            "Source": "LibRaw-0.21.4/E-1/fixture-mode-profile"
+          }
+        },
+        "Diagnostics": [
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2010"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2020"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2030"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2040"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2050"
+          },
+          {
+            "Code": "white-level-estimated",
+            "Message": "reference bit-depth default, not measured saturation; rendering requires explicit consent or override",
+            "Source": "LibRaw-0.21.4/E-1/fixture-mode-profile/12-bit-default-not-measured"
+          }
+        ]
+      },
+      "options": {
+        "Limits": {
+          "InputBytes": 0,
+          "Pixels": 0,
+          "Dimension": 0,
+          "IFDs": 0,
+          "Depth": 0,
+          "EntriesPerIFD": 0,
+          "MetadataBytes": 0,
+          "PreviewBytes": 0,
+          "WorkingBytes": 0
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "White": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ]
+              ],
+              "ReferenceWhite": [
+                0,
+                0,
+                0
+              ]
+            },
+            "Origin": 0,
+            "Source": ""
+          }
+        },
+        "ActiveArea": {
+          "Min": {
+            "X": 0,
+            "Y": 0
+          },
+          "Max": {
+            "X": 0,
+            "Y": 0
+          }
+        },
+        "ExposureEV": 0,
+        "PreserveOrientation": false,
+        "AllowEstimatedWhite": true
+      },
+      "width": 2560,
+      "height": 1920,
+      "png_bytes": 24363957,
+      "png_sha256": "245242c5a45e6fec7c971eecb629f33c16be2ca27a5265e27b5b1f5a2fc21f65",
+      "nrgba64_sha256": "89fc76f6983af4e3e9bbd22bd13df99b88467539d55791e2477c341096f5c7cc"
+    },
+    {
+      "id": "olympus-e-400-2151",
+      "archive_id": 2151,
+      "input_sha256": "1354e0ac98ea90820227650031d8215637a2aaabd15de995c5a1e00b1986261b",
+      "raw_samples_sha256": "2e675bd36bcfbe5de7d9afa1cc4fc8cd2aeb74d9f96f38ca30010918031fe2e3",
+      "metadata": {
+        "Make": "OLYMPUS IMAGING CORP.  ",
+        "Model": "E-400           ",
+        "NormalizedMake": "Olympus",
+        "NormalizedModel": "E-400",
+        "CameraID": {
+          "Value": "S0009",
+          "Origin": 1,
+          "Source": "Olympus/Equipment/0x0100"
+        },
+        "Firmware": {
+          "Value": "",
+          "Origin": 0,
+          "Source": ""
+        },
+        "Software": {
+          "Value": "Version 1.1                    ",
+          "Origin": 1,
+          "Source": "IFD/0x0131"
+        },
+        "Layout": {
+          "Value": "olympus-word16le-high12",
+          "Origin": 2,
+          "Source": "phase0/evidenced-layout-selector"
+        },
+        "CaptureMode": {
+          "Value": "SpecialMode=0 0 0;DriveMode=0 0 0",
+          "Origin": 1,
+          "Source": "Olympus/SpecialMode;CameraSettings/DriveMode"
+        },
+        "Geometry": {
+          "StoredWidth": 3768,
+          "StoredHeight": 2840,
+          "Width": 3768,
+          "Height": 2840,
+          "ActiveArea": {
+            "Value": {
+              "Min": {
+                "X": 74,
+                "Y": 52
+              },
+              "Max": {
+                "X": 3722,
+                "Y": 2788
+              }
+            },
+            "Origin": 1,
+            "Source": "Olympus/ImageProcessing/0x0612..0x0615"
+          }
+        },
+        "CFA": {
+          "Value": [
+            [
+              2,
+              1
+            ],
+            [
+              3,
+              4
+            ]
+          ],
+          "Origin": 1,
+          "Source": "EXIF/0xa302"
+        },
+        "BitDepth": {
+          "Value": 12,
+          "Origin": 1,
+          "Source": "Olympus/ValidBits"
+        },
+        "Orientation": {
+          "Value": 1,
+          "Origin": 1,
+          "Source": "IFD/0x0112"
+        },
+        "ExposureTime": {
+          "Value": 0.002,
+          "Origin": 1,
+          "Source": "EXIF/0x829a"
+        },
+        "FNumber": {
+          "Value": 10,
+          "Origin": 1,
+          "Source": "EXIF/0x829d"
+        },
+        "ISO": {
+          "Value": 200,
+          "Origin": 1,
+          "Source": "EXIF/0x8827"
+        },
+        "FocalLength": {
+          "Value": 42,
+          "Origin": 1,
+          "Source": "EXIF/0x920a"
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                96,
+                95
+              ],
+              [
+                96,
+                96
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/BlackLevel (R,G1,G2,B)"
+          },
+          "White": {
+            "Value": [
+              [
+                4095,
+                4095
+              ],
+              [
+                4095,
+                4095
+              ]
+            ],
+            "Origin": 3,
+            "Source": "LibRaw-0.21.4/E-400/fixture-mode-profile/12-bit-default-not-measured"
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                1,
+                2.296875
+              ],
+              [
+                1.2265625,
+                1
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/WB_RBLevels / 256"
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0.793778135180778,
+                  0.21103733637010097,
+                  -0.05434547155087889
+                ],
+                [
+                  0.36194156789640425,
+                  0.8820816369254165,
+                  -0.24402320482182085
+                ],
+                [
+                  0.11780821879580074,
+                  -0.2970354657432397,
+                  1.2680572469474387
+                ]
+              ],
+              "ReferenceWhite": [
+                0.95047,
+                1,
+                1.08883
+              ]
+            },
+            "Origin": 2,
+            "Source": "LibRaw-0.21.4/E-400/fixture-mode-profile"
+          }
+        },
+        "Diagnostics": [
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2010"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2020"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2030"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2040"
+          },
+          {
+            "Code": "olympus-short-directory",
+            "Message": "old Olympus block length omits its two-byte entry count; physical table is file-bounded",
+            "Source": "Olympus/0x2050"
+          },
+          {
+            "Code": "white-level-estimated",
+            "Message": "reference bit-depth default, not measured saturation; rendering requires explicit consent or override",
+            "Source": "LibRaw-0.21.4/E-400/fixture-mode-profile/12-bit-default-not-measured"
+          }
+        ]
+      },
+      "options": {
+        "Limits": {
+          "InputBytes": 0,
+          "Pixels": 0,
+          "Dimension": 0,
+          "IFDs": 0,
+          "Depth": 0,
+          "EntriesPerIFD": 0,
+          "MetadataBytes": 0,
+          "PreviewBytes": 0,
+          "WorkingBytes": 0
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "White": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ]
+              ],
+              "ReferenceWhite": [
+                0,
+                0,
+                0
+              ]
+            },
+            "Origin": 0,
+            "Source": ""
+          }
+        },
+        "ActiveArea": {
+          "Min": {
+            "X": 0,
+            "Y": 0
+          },
+          "Max": {
+            "X": 0,
+            "Y": 0
+          }
+        },
+        "ExposureEV": 0,
+        "PreserveOrientation": false,
+        "AllowEstimatedWhite": true
+      },
+      "width": 3648,
+      "height": 2736,
+      "png_bytes": 48587539,
+      "png_sha256": "323a7d4cd9ff88cc61ff86ba8396fa564546209ba07b04808e268912ab9c06db",
+      "nrgba64_sha256": "0a09fa3f2ef3e16fd07e1ee68d917e90a8187a01d87ee08a8f3d1cc8ec0ba533"
+    },
+    {
+      "id": "olympus-e-410-1173",
+      "archive_id": 1173,
+      "input_sha256": "b545f3d831275d7febb1d02bfa22b03078eeff27fcb4c5be6806e89857bb1ed7",
+      "raw_samples_sha256": "6fd3d64305d4be04759d9ba0599a7ae1d8b07a287171c4f58df837580243f3fd",
+      "metadata": {
+        "Make": "OLYMPUS IMAGING CORP.  ",
+        "Model": "E-410           ",
+        "NormalizedMake": "Olympus",
+        "NormalizedModel": "E-410",
+        "CameraID": {
+          "Value": "S0013",
+          "Origin": 1,
+          "Source": "Olympus/Equipment/0x0100"
+        },
+        "Firmware": {
+          "Value": "",
+          "Origin": 0,
+          "Source": ""
+        },
+        "Software": {
+          "Value": "Version 1.3                    ",
+          "Origin": 1,
+          "Source": "IFD/0x0131"
+        },
+        "Layout": {
+          "Value": "olympus-legacy-predictive12",
+          "Origin": 2,
+          "Source": "phase0/evidenced-layout-selector"
+        },
+        "CaptureMode": {
+          "Value": "SpecialMode=2 1 0;DriveMode=1 1 0",
+          "Origin": 1,
+          "Source": "Olympus/SpecialMode;CameraSettings/DriveMode"
+        },
+        "Geometry": {
+          "StoredWidth": 3720,
+          "StoredHeight": 2800,
+          "Width": 3720,
+          "Height": 2800,
+          "ActiveArea": {
+            "Value": {
+              "Min": {
+                "X": 52,
+                "Y": 44
+              },
+              "Max": {
+                "X": 3700,
+                "Y": 2780
+              }
+            },
+            "Origin": 1,
+            "Source": "Olympus/ImageProcessing/0x0612..0x0615"
+          }
+        },
+        "CFA": {
+          "Value": [
+            [
+              1,
+              2
+            ],
+            [
+              4,
+              3
+            ]
+          ],
+          "Origin": 1,
+          "Source": "EXIF/0xa302"
+        },
+        "BitDepth": {
+          "Value": 12,
+          "Origin": 1,
+          "Source": "Olympus/ValidBits"
+        },
+        "Orientation": {
+          "Value": 1,
+          "Origin": 1,
+          "Source": "IFD/0x0112"
+        },
+        "ExposureTime": {
+          "Value": 0.004,
+          "Origin": 1,
+          "Source": "EXIF/0x829a"
+        },
+        "FNumber": {
+          "Value": 6.3,
+          "Origin": 1,
+          "Source": "EXIF/0x829d"
+        },
+        "ISO": {
+          "Value": 400,
+          "Origin": 1,
+          "Source": "EXIF/0x8827"
+        },
+        "FocalLength": {
+          "Value": 35,
+          "Origin": 1,
+          "Source": "EXIF/0x920a"
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                73,
+                73
+              ],
+              [
+                73,
+                73
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/BlackLevel (R,G1,G2,B)"
+          },
+          "White": {
+            "Value": [
+              [
+                3946,
+                3946
+              ],
+              [
+                3946,
+                3946
+              ]
+            ],
+            "Origin": 2,
+            "Source": "LibRaw-0.21.4/E-410/fixture-mode-profile/colordata-maximum"
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                1.921875,
+                1
+              ],
+              [
+                1,
+                1.421875
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/WB_RBLevels / 256"
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0.627946350350534,
+                  0.21000849206257144,
+                  0.11251515758689451
+                ],
+                [
+                  0.30048972521830986,
+                  0.8086418370042548,
+                  -0.10913156222256477
+                ],
+                [
+                  0.06530769893330113,
+                  -0.22229824018769997,
+                  1.245820541254399
+                ]
+              ],
+              "ReferenceWhite": [
+                0.95047,
+                1,
+                1.08883
+              ]
+            },
+            "Origin": 2,
+            "Source": "LibRaw-0.21.4/E-410/fixture-mode-profile"
+          }
+        },
+        "Diagnostics": null
+      },
+      "options": {
+        "Limits": {
+          "InputBytes": 0,
+          "Pixels": 0,
+          "Dimension": 0,
+          "IFDs": 0,
+          "Depth": 0,
+          "EntriesPerIFD": 0,
+          "MetadataBytes": 0,
+          "PreviewBytes": 0,
+          "WorkingBytes": 0
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "White": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ]
+              ],
+              "ReferenceWhite": [
+                0,
+                0,
+                0
+              ]
+            },
+            "Origin": 0,
+            "Source": ""
+          }
+        },
+        "ActiveArea": {
+          "Min": {
+            "X": 0,
+            "Y": 0
+          },
+          "Max": {
+            "X": 0,
+            "Y": 0
+          }
+        },
+        "ExposureEV": 0,
+        "PreserveOrientation": false,
+        "AllowEstimatedWhite": false
+      },
+      "width": 3648,
+      "height": 2736,
+      "png_bytes": 49139803,
+      "png_sha256": "c6a2b5895490626e9074307d38c20f2c2793ab52bc875719f6403f38e7ff9c2d",
+      "nrgba64_sha256": "69b4b06ae6b38c8cffc5cb6afad97aa788a55c2cfc4461858af074d005af9b87"
+    },
+    {
+      "id": "olympus-e-510-5449",
+      "archive_id": 5449,
+      "input_sha256": "efab3d91a4f52ce65a428c15af5a54a170ef5961fb7765265c432faf19d6744c",
+      "raw_samples_sha256": "04bc6a9ba70a6c3dd6be307c593ed95384db0f42cee882bf55768038b6863d55",
+      "metadata": {
+        "Make": "OLYMPUS IMAGING CORP.  ",
+        "Model": "E-510           ",
+        "NormalizedMake": "Olympus",
+        "NormalizedModel": "E-510",
+        "CameraID": {
+          "Value": "S0010",
+          "Origin": 1,
+          "Source": "Olympus/Equipment/0x0100"
+        },
+        "Firmware": {
+          "Value": "",
+          "Origin": 0,
+          "Source": ""
+        },
+        "Software": {
+          "Value": "Version 1.3                    ",
+          "Origin": 1,
+          "Source": "IFD/0x0131"
+        },
+        "Layout": {
+          "Value": "olympus-legacy-predictive12",
+          "Origin": 2,
+          "Source": "phase0/evidenced-layout-selector"
+        },
+        "CaptureMode": {
+          "Value": "SpecialMode=0 0 0;DriveMode=0 0 0",
+          "Origin": 1,
+          "Source": "Olympus/SpecialMode;CameraSettings/DriveMode"
+        },
+        "Geometry": {
+          "StoredWidth": 3720,
+          "StoredHeight": 2800,
+          "Width": 3720,
+          "Height": 2800,
+          "ActiveArea": {
+            "Value": {
+              "Min": {
+                "X": 16,
+                "Y": 24
+              },
+              "Max": {
+                "X": 3664,
+                "Y": 2760
+              }
+            },
+            "Origin": 1,
+            "Source": "Olympus/ImageProcessing/0x0612..0x0615"
+          }
+        },
+        "CFA": {
+          "Value": [
+            [
+              1,
+              2
+            ],
+            [
+              4,
+              3
+            ]
+          ],
+          "Origin": 1,
+          "Source": "EXIF/0xa302"
+        },
+        "BitDepth": {
+          "Value": 12,
+          "Origin": 1,
+          "Source": "Olympus/ValidBits"
+        },
+        "Orientation": {
+          "Value": 1,
+          "Origin": 1,
+          "Source": "IFD/0x0112"
+        },
+        "ExposureTime": {
+          "Value": 0.00125,
+          "Origin": 1,
+          "Source": "EXIF/0x829a"
+        },
+        "FNumber": {
+          "Value": 9,
+          "Origin": 1,
+          "Source": "EXIF/0x829d"
+        },
+        "ISO": {
+          "Value": 400,
+          "Origin": 1,
+          "Source": "EXIF/0x8827"
+        },
+        "FocalLength": {
+          "Value": 42,
+          "Origin": 1,
+          "Source": "EXIF/0x920a"
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                73,
+                73
+              ],
+              [
+                73,
+                74
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/BlackLevel (R,G1,G2,B)"
+          },
+          "White": {
+            "Value": [
+              [
+                3946,
+                3946
+              ],
+              [
+                3946,
+                3946
+              ]
+            ],
+            "Origin": 2,
+            "Source": "LibRaw-0.21.4/E-510/fixture-mode-profile/colordata-maximum"
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                1.890625,
+                1
+              ],
+              [
+                1,
+                1.40625
+              ]
+            ],
+            "Origin": 1,
+            "Source": "Olympus/WB_RBLevels / 256"
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0.6271630606283036,
+                  0.21120066082097766,
+                  0.11210627855071864
+                ],
+                [
+                  0.299200055370438,
+                  0.811499380043306,
+                  -0.110699435413744
+                ],
+                [
+                  0.05501746792988246,
+                  -0.19059457786813003,
+                  1.2244071099382476
+                ]
+              ],
+              "ReferenceWhite": [
+                0.95047,
+                1,
+                1.08883
+              ]
+            },
+            "Origin": 2,
+            "Source": "LibRaw-0.21.4/E-510/fixture-mode-profile"
+          }
+        },
+        "Diagnostics": null
+      },
+      "options": {
+        "Limits": {
+          "InputBytes": 0,
+          "Pixels": 0,
+          "Dimension": 0,
+          "IFDs": 0,
+          "Depth": 0,
+          "EntriesPerIFD": 0,
+          "MetadataBytes": 0,
+          "PreviewBytes": 0,
+          "WorkingBytes": 0
+        },
+        "Calibration": {
+          "Black": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "White": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "WhiteBalance": {
+            "Value": [
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ],
+            "Origin": 0,
+            "Source": ""
+          },
+          "Color": {
+            "Value": {
+              "CameraToXYZ": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0
+                ]
+              ],
+              "ReferenceWhite": [
+                0,
+                0,
+                0
+              ]
+            },
+            "Origin": 0,
+            "Source": ""
+          }
+        },
+        "ActiveArea": {
+          "Min": {
+            "X": 0,
+            "Y": 0
+          },
+          "Max": {
+            "X": 0,
+            "Y": 0
+          }
+        },
+        "ExposureEV": 0,
+        "PreserveOrientation": false,
+        "AllowEstimatedWhite": false
+      },
+      "width": 3648,
+      "height": 2736,
+      "png_bytes": 50151557,
+      "png_sha256": "80da14c1ac7cd905fdde3b160e77c482b0be92ba5446f7f07e5cf671b85ef92b",
+      "nrgba64_sha256": "ec7b510d45131abe7826abbc389d2523312afa5c4d6ac44f6da2d7d9b003a5b4"
+    }
+  ]
+}

@@ -798,6 +798,17 @@ validation. Phase 7's combined release/certification is not implied.
 **Gate:** the initial release criteria in section 11 pass. Do not claim all
 Olympus or OM System cameras are supported.
 
+**Implementation status:** Phase 7 engineering is implemented: public/runnable
+metadata, preview, RAW and PNG examples; four provenance-bound full-resolution
+16-bit rendered regressions; full filesystem/in-memory API parity; measured
+performance and published limitations/licensing/support matrix. See the
+[readiness report](docs/release-readiness.md). The owner explicitly approved
+engineering completion with certification/release **blocked**, not a waiver
+of the fixture gate. Only one independently captured approved original per
+initial camera/mode is available. The mechanical certification command must
+fail until the missing evidence is supplied, independently reviewed and
+validated; no M1+M2 release or camera certification is claimed.
+
 ### Phase 8: newer compression and additional modes (M3)
 
 **Depends on:** phase 5; independent of rendering phases 6-7.
@@ -817,23 +828,29 @@ reference must not rewrite earlier goldens without an explained review.
 
 ## 11. Definition of done for the initial M1 + M2 release
 
-- [ ] Project license, third-party notices, and fixture permissions are recorded.
-- [ ] Production build and decode work with `CGO_ENABLED=0`.
+- [x] Project license, third-party notices, and fixture permissions are recorded.
+- [x] Production build and decode work with `CGO_ENABLED=0`.
 - [ ] Advertised layouts and camera/modes have required fixtures.
-- [ ] Raw sample comparisons have zero unexplained differences.
-- [ ] Geometry, active area, CFA phase, numeric domain, and orientation agree
+- [x] Raw sample comparisons have zero unexplained differences.
+- [x] Geometry, active area, CFA phase, numeric domain, and orientation agree
       with the documented reference contract.
-- [ ] Unsupported/newer layouts return explicit unsupported outcomes.
-- [ ] JPEG preview extraction is never presented as RAW decoding.
-- [ ] Rendering works for explicitly calibrated supported cameras and fails
+- [x] Unsupported/newer layouts return explicit unsupported outcomes.
+- [x] JPEG preview extraction is never presented as RAW decoding.
+- [x] Rendering works for explicitly calibrated supported cameras and fails
       clearly when required calibration is unavailable.
-- [ ] Unit, integration, malformed-input, race, fuzz-smoke, and portability
+- [x] Unit, integration, malformed-input, race, fuzz-smoke, and portability
       checks pass within their documented environments.
-- [ ] Benchmarks demonstrate bounded allocations and document baseline speed.
-- [ ] README/examples explain ownership, defaults, errors, supported cameras,
+- [x] Benchmarks demonstrate bounded allocations and document baseline speed.
+- [x] README/examples explain ownership, defaults, errors, supported cameras,
       deferred modes, fixture acquisition, and reference reproduction.
-- [ ] No mandatory test silently skips and no ordinary test invokes LibRaw,
+- [x] No mandatory test silently skips and no ordinary test invokes LibRaw,
       ExifTool, or the network.
+
+**Release remains blocked:** checked engineering items apply only to the
+documented evidence and validation environments, not camera-wide certification.
+The unchecked fixture requirement needs at least two independently captured,
+individually licensed originals per advertised camera/mode. No release tag
+may be inferred from this checklist or green engineering CI.
 
 ## 12. Reference starting points
 

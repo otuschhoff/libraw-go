@@ -5,11 +5,14 @@
 package libraw
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"image"
+	"image/png"
 	"io"
 	"math"
 	"os"
@@ -21,9 +24,18 @@ import (
 
 func TestReferenceRendering(t *testing.T) {
 	var manifest struct{ Fixtures []struct{ ID, SHA256 string } }
+	var baselines struct{ Cases []renderBaseline }
 	readJSON(t, "testdata/fixtures.json", &manifest)
-	if len(manifest.Fixtures) != 4 {
+	readJSON(t, "testdata/render/index.json", &baselines)
+	if len(manifest.Fixtures) != 4 || len(baselines.Cases) != len(manifest.Fixtures) {
 		t.Fatal("review rendering coverage when required fixtures change")
+	}
+	byID := map[string]renderBaseline{}
+	for _, baseline := range baselines.Cases {
+		if _, exists := byID[baseline.ID]; exists {
+			t.Fatal("duplicate render baseline")
+		}
+		byID[baseline.ID] = baseline
 	}
 	dir := os.Getenv("ORF_FIXTURE_DIR")
 	if dir == "" {
@@ -74,6 +86,11 @@ func TestReferenceRendering(t *testing.T) {
 				}
 			}
 			opts := RenderOptions{AllowEstimatedWhite: estimated}
+			baseline, exists := byID[fixture.ID]
+			if !exists || baseline.InputSHA256 != fixture.SHA256 ||
+				!reflect.DeepEqual(baseline.Metadata, file.Metadata()) || baseline.Options != opts {
+				t.Fatal("frozen rendering metadata, calibration, options or input binding changed")
+			}
 			out, err := Render(context.Background(), raw, opts)
 			if err != nil {
 				t.Fatal(err)
@@ -116,12 +133,128 @@ func TestReferenceRendering(t *testing.T) {
 					}
 				}
 			}
+			compareRenderedBaseline(t, out, baseline)
+			checkMemoryReaderParity(t, filepath.Join(dir, fixture.ID+".orf"), file, raw, opts, out)
 			out.Pix[0]++
 			if !reflect.DeepEqual(before, *raw) {
 				t.Fatal("real-fixture rendering changed/aliased RAW")
 			}
 			t.Logf("rendered %dx%d, nonzero=%d, estimated-white=%v", width, height, nonzero, estimated)
 		})
+	}
+}
+
+type renderBaseline struct {
+	ID           string
+	InputSHA256  string `json:"input_sha256"`
+	Metadata     Metadata
+	Options      RenderOptions
+	PNGBytes     int64  `json:"png_bytes"`
+	PNGSHA256    string `json:"png_sha256"`
+	PixelsSHA256 string `json:"nrgba64_sha256"`
+}
+
+func compareRenderedBaseline(t *testing.T, got *image.NRGBA64, baseline renderBaseline) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata/render", baseline.ID+".png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(data)
+	if int64(len(data)) != baseline.PNGBytes || hex.EncodeToString(hash[:]) != baseline.PNGSHA256 {
+		t.Fatal("rendered PNG artifact digest/length changed")
+	}
+	decoded, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pixels []byte
+	var stride int
+	switch value := decoded.(type) {
+	case *image.RGBA64:
+		pixels, stride = value.Pix, value.Stride
+	case *image.NRGBA64:
+		pixels, stride = value.Pix, value.Stride
+	default:
+		t.Fatal("baseline lost 16-bit channels")
+	}
+	if decoded.Bounds() != got.Rect || stride != got.Stride {
+		t.Fatal("baseline crop/orientation differs")
+	}
+	pixelHash := sha256.Sum256(pixels)
+	if hex.EncodeToString(pixelHash[:]) != baseline.PixelsSHA256 {
+		t.Fatal("decoded baseline digest changed")
+	}
+	differences, mismatches, maxError, first := 0, 0, 0, -1
+	for y := range got.Rect.Dy() {
+		for x := range got.Rect.Dx() {
+			offset := y*stride + x*8
+			if binary.BigEndian.Uint16(got.Pix[offset+6:]) != 65535 ||
+				binary.BigEndian.Uint16(pixels[offset+6:]) != 65535 {
+				t.Fatalf("nonopaque output/baseline at (%d,%d)", x, y)
+			}
+			for c := range 3 {
+				i := offset + c*2
+				delta := absCode(binary.BigEndian.Uint16(got.Pix[i:]), binary.BigEndian.Uint16(pixels[i:]))
+				maxError = max(maxError, delta)
+				if delta != 0 {
+					differences++
+				}
+				if delta > 1 {
+					mismatches++
+					if first < 0 {
+						first = i
+					}
+				}
+			}
+		}
+	}
+	if mismatches != 0 {
+		t.Fatalf("render regression: %d out-of-tolerance channels, max error=%d; first=(%d,%d), channel=%d",
+			mismatches, maxError, first%stride/8, first/stride, first%8/2)
+	}
+	t.Logf("full rendered baseline: %d RGB channels, differences=%d, max error=%d (allowed 1)",
+		got.Rect.Dx()*got.Rect.Dy()*3, differences, maxError)
+}
+
+func checkMemoryReaderParity(t *testing.T, path string, disk *File, raw *RawImage, opts RenderOptions, rgb *image.NRGBA64) {
+	t.Helper()
+	input, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := sha256.Sum256(input)
+	memory, err := Open(bytes.NewReader(input), int64(len(input)), OpenOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(memory.Metadata(), disk.Metadata()) || memory.Capabilities() != disk.Capabilities() {
+		t.Fatal("metadata/capabilities differ by ReaderAt implementation")
+	}
+	diskPreview, err := disk.Preview(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	memoryPreview, err := memory.Preview(context.Background())
+	if err != nil || !reflect.DeepEqual(memoryPreview, diskPreview) {
+		t.Fatal("preview differs by ReaderAt implementation", err)
+	}
+	memoryPreview.JPEG[0] ^= 1
+	if memoryPreview.JPEG[0] == diskPreview.JPEG[0] {
+		t.Fatal("previews alias")
+	}
+	memoryRaw, err := memory.DecodeRaw(context.Background())
+	if err != nil || !reflect.DeepEqual(memoryRaw, raw) {
+		t.Fatal("RAW samples, geometry or calibration differ by ReaderAt implementation", err)
+	}
+	memoryRGB, err := Render(context.Background(), memoryRaw, opts)
+	if err != nil || !reflect.DeepEqual(memoryRGB, rgb) {
+		t.Fatal("rendering differs by ReaderAt implementation", err)
+	}
+	memoryRaw.Pixels[0] ^= 1
+	memoryRGB.Pix[0] ^= 1
+	if memoryRaw.Pixels[0] == raw.Pixels[0] || memoryRGB.Pix[0] == rgb.Pix[0] || sha256.Sum256(input) != before {
+		t.Fatal("in-memory results alias each other or modify borrowed input")
 	}
 }
 

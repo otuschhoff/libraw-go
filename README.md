@@ -2,12 +2,14 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 6 calibrated deterministic development, plus exact sensor-code decoding for the evidenced
+**Current status: Phase 7 engineering implemented; camera certification and the
+M1+M2 release remain blocked pending second independently captured licensed
+fixtures. Exact sensor-code decoding is available for the evidenced
 `olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
-metadata, embedded JPEGs and `orfinfo`. Basic independent sRGB rendering is
+metadata, embedded JPEGs, `orfinfo` and `orfexport`. Basic independent sRGB rendering is
 implemented for explicitly calibrated Bayer images. This is a
 layout-scoped source milestone, not camera/mode certification or a tagged
-release. See the [M1 support and validation contract](docs/m1.md).**
+release. See the [Phase 7 readiness and release gate](docs/release-readiness.md).**
 
 ## Project decisions
 
@@ -24,6 +26,32 @@ The production module is initialized at the approved path and Go version.
 It depends only on the standard library and builds with `CGO_ENABLED=0`.
 Native tools below remain development-only, with no native or
 external-process production dependency.
+
+## Phase 7: examples and frozen rendering regressions
+
+```sh
+CGO_ENABLED=0 go run ./cmd/orfinfo photo.orf
+CGO_ENABLED=0 go run ./cmd/orfexport -format preview -output preview.jpg photo.orf
+CGO_ENABLED=0 go run ./cmd/orfexport -format raw -output sensor.u16le photo.orf
+CGO_ENABLED=0 go run ./cmd/orfexport -format png -output developed.png photo.orf
+```
+
+The exporter writes original JPEG bytes, headerless full-sensor u16le samples,
+or independently developed 16-bit PNGs. It never replaces existing outputs
+or publishes partially written files. E-1/E-400 PNG export needs explicit
+`-allow-estimated-white` consent or library-level white overrides.
+
+Four full-resolution frozen PNGs bind source/calibration/options to unchanged
+independent RAW oracles. Integration compares all **104,573,952 RGB channels**
+within one uint16 code, checks exact alpha, and verifies filesystem/in-memory
+metadata, preview, RAW and rendering parity and ownership.
+
+The [readiness report](docs/release-readiness.md) provides the exact support
+matrix, examples, ownership/errors/defaults, licenses, artifact/reproduction
+workflow, measurements, validation and remaining fixture-acquisition steps.
+`go run ./tools/rendergolden verify` verifies artifacts offline.
+`go run ./tools/rendergolden check-certification` deliberately fails until
+the missing camera/mode evidence is supplied; engineering CI is not certification.
 
 ## Phase 6: calibration and deterministic development
 
@@ -44,8 +72,8 @@ The [rendering contract](docs/rendering.md) specifies options, matrix direction,
 reference white, profile provenance/scope, equations, limits, cancellation,
 tiny-image policy and validation. Missing calibration/crop never causes a
 generic color or whole-sensor fallback. Crops smaller than 2x2 return a typed
-unsupported error. Phase 7 remains the combined M1+M2 release gate; camera
-certification is not claimed.
+unsupported error. Phase 7 engineering is recorded above; its combined M1+M2
+release gate remains blocked and camera certification is not claimed.
 
 ## Phase 5: M1 hardening and release validation
 

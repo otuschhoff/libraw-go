@@ -105,6 +105,17 @@ sensor samples are derived from those CC0 photographs and remain CC0; do not
 mistake the project's software license for a restriction on the photographs.
 The sample files do not contain a newly authored camera calibration table.
 
+Phase 7's full-resolution [rendered PNGs](testdata/render/) are also derived
+from these same four approved CC0 photographs and remain CC0-1.0. They are
+project-renderer regression outputs, not new independent photographs or a
+LibRaw color oracle. Their [index](testdata/render/index.json) records separate
+image and metadata licenses: metadata/calibration observations and project
+tooling remain LGPL-2.1-only, including the LibRaw-derived profile data.
+Source-image/sample hashes and saved per-file CC0 evidence are bound in that
+index; it does not relicense camera coefficients as CC0 or enlarge the approved
+photo corpus. Reproduction and release restrictions are documented in the
+[readiness report](docs/release-readiness.md).
+
 Only the selected CC0 files are approved for this corpus. Other photographs
 in the same public archive may have different, restrictive licenses.
 The archive's human-readable "16bit" labels describe neither a verified

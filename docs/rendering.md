@@ -7,8 +7,9 @@ automatic white balance, tone mapping, or camera-JPEG matching.
 
 The owner approved the four narrowly scoped LibRaw-derived profiles below.
 This does not waive the two-fixtures-per-advertised-camera/mode certification
-gate. There is still only one photograph per camera. Phase 7's combined M1+M2
-release, regression images, examples and release certification are not claimed.
+gate. There is still only one photograph per camera. Phase 7's
+[engineering/readiness report](release-readiness.md) now records examples and
+rendered regressions; combined M1+M2 release/certification remains blocked.
 
 ## Profile and capability matrix
 
@@ -186,8 +187,9 @@ uses the unchanged licensed/hash-checked M1 fixtures and goldens. It renders all
 four full-resolution crops, checks all output alphas and shapes, verifies 257
 independently calculated sensor-coordinate probes per image within one uint16
 code, and verifies RAW ownership and estimated-white gating. All 36,691,904
-RAW samples must still match exactly. Phase 7 will add committed end-to-end
-rendered regression artifacts, not regenerate the RAW oracle from this code.
+RAW samples must still match exactly. Phase 7 adds committed end-to-end
+rendered regression artifacts and ReaderAt parity without regenerating the RAW
+oracle from this code; see the readiness report for its separate measurements.
 
 Independent stage tests use `1e-6` absolute tolerance, with at most one uint16
 code for final quantization. They cover all four CFA phases, odd crops, G1/G2
@@ -245,4 +247,5 @@ estimated-white policy, exact profile scope, no invented black/WB, every option'
 input/output ownership, odd-origin/border isolation, all mirrored orientations,
 numeric underflow/overflow rejection, cancellation before allocation/final
 success, quotas and 32-bit sizing. No outstanding Phase 6 implementation findings
-remain; the explicitly deferred Phase 7 release/certification work is unchanged.
+remain. Phase 7 engineering is recorded separately; release/certification
+continues to require additional independent licensed originals.

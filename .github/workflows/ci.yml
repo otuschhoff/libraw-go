@@ -40,6 +40,7 @@ jobs:
         run: |
           go run tools/reference/main.go fetch
           go run tools/reference/main.go verify
+          go run ./tools/rendergolden verify
       - name: CGO-disabled integration, vet and build
         run: |
           go version
