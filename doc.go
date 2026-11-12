@@ -18,7 +18,21 @@
 // scaled to fill uint16. Geometry is in unrotated sensor coordinates.
 //
 // File operations borrow an immutable io.ReaderAt and never close it.
-// Metadata snapshots, raw images and successful previews are caller-owned.
-// Concurrent operations require a concurrently readable input. Preview returns original
+// Open, Preview, DecodeRaw and Render accept context.Context and cooperate with
+// cancellation during parsing, reads and pixel loops. A blocked ReaderAt call
+// and Go allocations cannot be interrupted. Errors preserve context errors.
+//
+// File, RawImage, Preview and RenderedImage must be closed to release shared
+// Budget reservations. Limits remain per-operation quotas; outputs count until
+// Close, scratch until return, and shared immutable metadata until its final
+// dependent handle closes. Metadata returns borrowed read-only diagnostics;
+// Clone explicitly creates an unbudgeted caller-owned snapshot. Budgets cover
+// explicit buffers and conservative parser allowances, not heap/RSS, caller
+// memory, GC retention or all dependency allocations. They do not replace
+// subprocess isolation against fatal runtime failures or memory exhaustion.
+//
+// Concurrent operations require a concurrently readable input and share their
+// inherited Budget. Closing or mutating a handle must not overlap its use.
+// Preview returns original
 // embedded JPEG bytes, and ErrNoPreview when no candidate meets its limits.
 package libraw

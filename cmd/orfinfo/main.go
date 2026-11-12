@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,11 +32,12 @@ func run(args []string, out, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+	file, err := libraw.Open(context.Background(), input, info.Size(), libraw.OpenOptions{})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	defer file.Close()
 	report := struct {
 		SchemaVersion int
 		Metadata      libraw.Metadata

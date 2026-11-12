@@ -18,6 +18,7 @@ import (
 // explicit sensor-coordinate crop. Limits resolve as for OpenOptions.
 type RenderOptions struct {
 	Limits              Limits
+	Budget              *Budget
 	Calibration         Calibration
 	ActiveArea          image.Rectangle
 	ExposureEV          float64
@@ -38,11 +39,12 @@ type renderPlan struct {
 
 // Render develops a regular Bayer plane into opaque, caller-owned sRGB.
 // It never changes or retains raw, its samples, or options. The caller must
-// not modify them during rendering. Working storage is output plus three
-// normalized Bayer rows; the already caller-owned RAW plane is not charged.
+// not modify or close them during rendering. Working storage is output plus
+// three normalized Bayer rows. A library-owned RAW plane remains charged to
+// its inherited Budget until closed; caller-constructed RAW storage is excluded.
 // Crops narrower or shorter than two pixels return ErrUnsupported rather than
 // inventing missing channels. Missing crop/calibration/orientation is explicit.
-func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGBA64, error) {
+func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*RenderedImage, error) {
 	if ctx == nil || raw == nil {
 		return nil, &Error{Op: "render", Kind: ErrInvalidOptions, Detail: "nil context or RAW image"}
 	}
@@ -53,6 +55,30 @@ func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGB
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, &Error{Op: "render", Cause: err}
+	}
+	limits, err := (OpenOptions{Limits: opts.Limits}).Resolve()
+	if err != nil {
+		return nil, err
+	}
+	budget := opts.Budget
+	if budget == nil {
+		budget = raw.budget
+	}
+	_, account, err := operationAccount(budget, limits.WorkingBytes)
+	if err != nil {
+		return nil, err
+	}
+	if err := account.Reserve(plan.workingBytes); err != nil {
+		return nil, err
+	}
+	success := false
+	defer func() {
+		if !success {
+			account.Close()
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{Op: "render", Cause: err}
 	}
@@ -71,6 +97,11 @@ func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGB
 			}
 			sensorY := plan.crop.Min.Y + row
 			for x := range width {
+				if x&255 == 0 {
+					if err := ctx.Err(); err != nil {
+						return nil, &Error{Op: "render", Cause: err}
+					}
+				}
 				sensorX := plan.crop.Min.X + x
 				sample := raw.Pixels[sensorY*raw.Stride+sensorX]
 				if sample > plan.maximum {
@@ -85,6 +116,11 @@ func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGB
 			cached[slot] = row
 		}
 		for x := range width {
+			if x&255 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, &Error{Op: "render", Cause: err}
+				}
+			}
 			camera := demosaic(rows, width, height, x, y, plan.crop.Min, raw.CFA)
 			linear := transform3(plan.color, camera)
 			dx, dy := orientPixel(x, y, width, height, plan.orientation)
@@ -102,7 +138,9 @@ func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGB
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{Op: "render", Cause: err}
 	}
-	return output, nil
+	account.Release(plan.workingBytes - uint64(plan.outputBytes))
+	success = true
+	return &RenderedImage{NRGBA64: output, account: account}, nil
 }
 
 func makeRenderPlan(raw *RawImage, opts RenderOptions, pixels bool) (renderPlan, error) {
@@ -117,8 +155,12 @@ func makeRenderPlan(raw *RawImage, opts RenderOptions, pixels bool) (renderPlan,
 	if raw.Width <= 0 || raw.Height <= 0 || raw.Stride < raw.Width || raw.BitDepth == 0 || raw.BitDepth > 16 {
 		return fail(ErrCorrupt, "invalid RAW geometry, stride or bit depth")
 	}
+	sensorPixels, err := bounded.Mul(uint64(raw.Width), uint64(raw.Height))
+	if err != nil {
+		return plan, err
+	}
 	if int64(raw.Width) > limits.Dimension || int64(raw.Height) > limits.Dimension ||
-		uint64(raw.Width)*uint64(raw.Height) > uint64(limits.Pixels) {
+		sensorPixels > uint64(limits.Pixels) {
 		return fail(ErrLimitExceeded, "RAW dimensions/pixels exceed render limits")
 	}
 	count, err := bounded.Mul(uint64(raw.Stride), uint64(raw.Height))
@@ -238,11 +280,19 @@ func makeRenderPlan(raw *RawImage, opts RenderOptions, pixels bool) (renderPlan,
 	if plan.orientation >= OrientationLeftTop {
 		plan.width, plan.height = plan.height, plan.width
 	}
-	output, err := bounded.Mul(uint64(plan.width)*uint64(plan.height), 8)
+	outputPixels, err := bounded.Mul(uint64(plan.width), uint64(plan.height))
 	if err != nil {
 		return plan, err
 	}
-	plan.workingBytes, err = bounded.Add(output, uint64(plan.crop.Dx())*24)
+	output, err := bounded.Mul(outputPixels, 8)
+	if err != nil {
+		return plan, err
+	}
+	scratch, err := bounded.Mul(uint64(plan.crop.Dx()), 24)
+	if err != nil {
+		return plan, err
+	}
+	plan.workingBytes, err = bounded.Add(output, scratch)
 	if err != nil {
 		return plan, err
 	}

@@ -3,15 +3,26 @@
 package libraw
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/otuschhoff/libraw-go/internal/bounded"
+	"github.com/otuschhoff/libraw-go/internal/tiff"
 )
+
+func profileTestReader() *tiff.Reader {
+	source, _ := bounded.New(bytes.NewReader(nil), 0, 1)
+	reader, _ := tiff.New(source, binary.LittleEndian, 4096, 16<<20)
+	return reader
+}
 
 func approvedProfileParsers() []parser {
 	var out []parser
 	for i, model := range []string{"E-1", "E-400", "E-410", "E-510"} {
-		p := parser{cameraID: []string{"D4040", "S0009", "S0013", "S0010"}[i],
+		p := parser{reader: profileTestReader(), cameraID: []string{"D4040", "S0009", "S0013", "S0010"}[i],
 			mode: "SpecialMode=0 0 0;DriveMode=0 0 0"}
 		if i == 0 {
 			p.mode = "SpecialMode=0 0 0;DriveMode=0 0"

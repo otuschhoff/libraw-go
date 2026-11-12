@@ -444,7 +444,7 @@ func TestLegacyWorkingQuotaOwnershipCancellationAndIO(t *testing.T) {
 	for _, mode := range []string{"disk", "short", "short nil", "full error", "joined EOF", "cancel refill", "cancel before", "deadline"} {
 		t.Run(mode, func(t *testing.T) {
 			reader := &rawReader{input: bytes.NewReader(data)}
-			f, err := Open(reader, int64(len(data)), OpenOptions{})
+			f, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -523,14 +523,15 @@ func TestLegacyPublicWorkingQuotaAndLazyOpen(t *testing.T) {
 	payload, _ := encodeLegacy(legacyPlane(128, 256), 128, 256)
 	data := legacyORF(128, 256, payload)
 	reader := &rawReader{input: bytes.NewReader(data)}
-	file, err := Open(reader, int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 	if err != nil || reader.calls != 1 {
 		t.Fatalf("Open must read only the seven-byte raw prefix: %d reads, %v", reader.calls, err)
 	}
 	required := file.plan.outputBytes + file.plan.scratchBytes + uint64(len(file.metadata.Diagnostics))*64
 	for _, delta := range []int64{-1, 0, 1} {
 		opts := OpenOptions{Limits: Limits{MetadataBytes: 32768, PreviewBytes: 1, WorkingBytes: int64(required) + delta}}
-		file, err := Open(reader, int64(len(data)), opts)
+		opts.Budget, _ = NewBudget(1 << 30)
+		file, err := Open(context.Background(), reader, int64(len(data)), opts)
 		if err != nil || file.Capabilities().Raw.Available != (delta >= 0) {
 			t.Fatalf("public working-quota capability boundary: %v", err)
 		}
@@ -550,7 +551,7 @@ func TestLegacyFinalRowCancellation(t *testing.T) {
 	payload, _ := encodeLegacy(legacyPlane(2, 1), 2, 1)
 	data := legacyORF(2, 1, payload)
 	reader := &rawReader{input: bytes.NewReader(data)}
-	file, err := Open(reader, int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

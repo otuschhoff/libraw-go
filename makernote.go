@@ -30,13 +30,11 @@ func (p *parser) makerAt(entry tiff.Entry, depth int64) error {
 			return err
 		}
 		if string(header[8:]) != "II\x03\x00" {
-			p.diagnostic("unsupported-makernote", "unevidenced Olympus MakerNote order/version", "EXIF/0x927c")
-			return nil
+			return p.diagnostic("unsupported-makernote", "unevidenced Olympus MakerNote order/version", "EXIF/0x927c")
 		}
 		p.makerForm, base, start = "OLYMPUS", entry.Offset, entry.Offset+12
 	default:
-		p.diagnostic("unsupported-makernote", "unevidenced Olympus MakerNote signature", "EXIF/0x927c")
-		return nil
+		return p.diagnostic("unsupported-makernote", "unevidenced Olympus MakerNote signature", "EXIF/0x927c")
 	}
 	var count [2]byte
 	if err := p.source.ReadAt(count[:], start); err != nil {
@@ -86,7 +84,9 @@ func (p *parser) makerAt(entry tiff.Entry, depth int64) error {
 			expected := uint64(binary.LittleEndian.Uint16(count[:])) * 12
 			switch uint64(e.Count) {
 			case expected:
-				p.diagnostic("olympus-short-directory", "old Olympus block length omits its two-byte entry count; physical table is file-bounded", fmt.Sprintf("Olympus/0x%04x", tag))
+				if err := p.diagnostic("olympus-short-directory", "old Olympus block length omits its two-byte entry count; physical table is file-bounded", fmt.Sprintf("Olympus/0x%04x", tag)); err != nil {
+					return err
+				}
 			case expected + 2:
 			default:
 				return badEntry(e, "old Olympus subdirectory length is neither exact nor the evidenced two-byte omission")
@@ -115,7 +115,10 @@ func (p *parser) makerAt(entry tiff.Entry, depth int64) error {
 				if err != nil {
 					return err
 				}
-				p.cameraID = strings.TrimSpace(value)
+				p.cameraID, err = p.trimText(value)
+				if err != nil {
+					return err
+				}
 			}
 		case 0x2020:
 			if err := p.cameraSettings(child, base); err != nil {

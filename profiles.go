@@ -51,12 +51,18 @@ func (p *parser) applyProfile(plan decodePlan) error {
 		}
 	}
 	if !m.Calibration.White.Present() {
-		p.diagnostic("white-level-unavailable", "no verified per-file white level or approved production profile", "calibration")
+		if err := p.diagnostic("white-level-unavailable", "no verified per-file white level or approved production profile", "calibration"); err != nil {
+			return err
+		}
 	} else if m.Calibration.White.Origin == OriginEstimate {
-		p.diagnostic("white-level-estimated", "reference bit-depth default, not measured saturation; rendering requires explicit consent or override", m.Calibration.White.Source)
+		if err := p.diagnostic("white-level-estimated", "reference bit-depth default, not measured saturation; rendering requires explicit consent or override", m.Calibration.White.Source); err != nil {
+			return err
+		}
 	}
 	if !m.Calibration.Color.Present() {
-		p.diagnostic("color-transform-unavailable", "no verified camera RGB to XYZ transform for this identity/mode/geometry", "calibration")
+		if err := p.diagnostic("color-transform-unavailable", "no verified camera RGB to XYZ transform for this identity/mode/geometry", "calibration"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -4,6 +4,7 @@
 package bounded
 
 import (
+	"context"
 	"io"
 	"math"
 	"reflect"
@@ -38,6 +39,7 @@ func Int(n uint64) (int, error) {
 type Reader struct {
 	input io.ReaderAt
 	size  int64
+	ctx   context.Context
 }
 
 func New(input io.ReaderAt, size, maxInput int64) (*Reader, error) {
@@ -47,8 +49,18 @@ func New(input io.ReaderAt, size, maxInput int64) (*Reader, error) {
 	if size > maxInput {
 		return nil, &fault.Error{Op: "input", Kind: fault.Limit, Detail: "declared input exceeds size limit"}
 	}
-	return &Reader{input: input, size: size}, nil
+	return &Reader{input: input, size: size, ctx: context.Background()}, nil
 }
+
+// WithContext borrows the same input but scopes cancellation to one operation.
+func (r *Reader) WithContext(ctx context.Context) *Reader {
+	copy := *r
+	copy.ctx = ctx
+	return &copy
+}
+
+func (r *Reader) Check() error             { return r.ctx.Err() }
+func (r *Reader) Context() context.Context { return r.ctx }
 
 func nilValue(input io.ReaderAt) bool {
 	value := reflect.ValueOf(input)
@@ -95,13 +107,33 @@ func (r *Reader) Extent(offset int64, length uint64) error {
 }
 
 func (r *Reader) ReadAt(data []byte, offset int64) error {
+	if err := r.Check(); err != nil {
+		return err
+	}
 	if err := r.Extent(offset, uint64(len(data))); err != nil {
+		return err
+	}
+	for len(data) > 0 {
+		size := min(len(data), 32<<10)
+		if err := r.readChunk(data[:size], offset); err != nil {
+			return err
+		}
+		data, offset = data[size:], offset+int64(size)
+	}
+	return r.Check()
+}
+
+func (r *Reader) readChunk(data []byte, offset int64) error {
+	if err := r.Check(); err != nil {
 		return err
 	}
 	if len(data) == 0 {
 		return nil
 	}
 	n, err := r.input.ReadAt(data, offset)
+	if canceled := r.Check(); canceled != nil {
+		return canceled
+	}
 	if n < 0 || n > len(data) {
 		position := offset
 		return &fault.Error{Op: "read", Kind: fault.Corrupt, Cause: err, Offset: &position, Detail: "ReaderAt returned invalid byte count"}
@@ -124,6 +156,9 @@ func (r *Reader) ReadAt(data []byte, offset int64) error {
 
 // Bytes validates the extent, platform int, and caller budget before allocation.
 func (r *Reader) Bytes(offset int64, length, maxBytes uint64) ([]byte, error) {
+	if err := r.Check(); err != nil {
+		return nil, err
+	}
 	if err := r.Extent(offset, length); err != nil {
 		return nil, err
 	}

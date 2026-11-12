@@ -256,10 +256,11 @@ func generateCase(f fixture, oracle rawIndex, inputPath, outputPath string) (ren
 	if err != nil {
 		return item, err
 	}
-	file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+	file, err := libraw.Open(context.Background(), input, info.Size(), libraw.OpenOptions{})
 	if err != nil {
 		return item, err
 	}
+	defer file.Close()
 	metadata := file.Metadata()
 	if metadata.NormalizedModel != f.Model || metadata.Layout.Value != f.Layout {
 		return item, errors.New("manifest identity/layout differs from parsed input")
@@ -268,6 +269,7 @@ func generateCase(f fixture, oracle rawIndex, inputPath, outputPath string) (ren
 	if err != nil {
 		return item, err
 	}
+	defer raw.Close()
 	samples := sha256.New()
 	row := make([]byte, raw.Width*2)
 	for y := range raw.Height {
@@ -286,6 +288,7 @@ func generateCase(f fixture, oracle rawIndex, inputPath, outputPath string) (ren
 	if err != nil {
 		return item, err
 	}
+	defer rgb.Close()
 	out, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return item, err

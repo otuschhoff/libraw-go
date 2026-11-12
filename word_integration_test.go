@@ -78,7 +78,7 @@ func testReferenceRawSamples(t *testing.T, layout string, expectedSamples int) {
 			if _, err := io.Copy(inputHash, input); err != nil || hex.EncodeToString(inputHash.Sum(nil)) != fixture.SHA256 {
 				t.Fatalf("input hash/read failure: %v", err)
 			}
-			file, err := Open(input, info.Size(), OpenOptions{})
+			file, err := Open(context.Background(), input, info.Size(), OpenOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -228,11 +228,12 @@ func benchmarkReferenceOperation(b *testing.B, operation string) {
 			if _, err := io.Copy(hash, input); err != nil || hex.EncodeToString(hash.Sum(nil)) != fixture.SHA256 {
 				b.Fatalf("benchmark input hash/read mismatch: %v", err)
 			}
-			file, err := Open(input, info.Size(), OpenOptions{})
+			file, err := Open(context.Background(), input, info.Size(), OpenOptions{})
 			if err != nil {
 				b.Fatal(err)
 			}
 			b.Logf("input_sha256=%s dimensions=%dx%d", fixture.SHA256, file.plan.width, file.plan.height)
+			defer file.Close()
 			var raw *RawImage
 			pixels := file.plan.width * file.plan.height
 			if operation == "render" {
@@ -241,6 +242,7 @@ func benchmarkReferenceOperation(b *testing.B, operation string) {
 					b.Fatal(err)
 				}
 				pixels = raw.ActiveArea.Dx() * raw.ActiveArea.Dy()
+				defer raw.Close()
 				b.Logf("render_crop=%v exif_orientation=%d", raw.ActiveArea, raw.Orientation)
 			}
 			b.ReportAllocs()
@@ -253,17 +255,23 @@ func benchmarkReferenceOperation(b *testing.B, operation string) {
 			for b.Loop() {
 				switch operation {
 				case "decode":
-					if _, err := file.DecodeRaw(context.Background()); err != nil {
+					result, err := file.DecodeRaw(context.Background())
+					if err != nil {
 						b.Fatal(err)
 					}
+					result.Close()
 				case "render":
-					if _, err := Render(context.Background(), raw, RenderOptions{AllowEstimatedWhite: true}); err != nil {
+					result, err := Render(context.Background(), raw, RenderOptions{AllowEstimatedWhite: true})
+					if err != nil {
 						b.Fatal(err)
 					}
+					result.Close()
 				case "open":
-					if _, err := Open(input, info.Size(), OpenOptions{}); err != nil {
+					result, err := Open(context.Background(), input, info.Size(), OpenOptions{})
+					if err != nil {
 						b.Fatal(err)
 					}
+					result.Close()
 				}
 			}
 			if operation != "open" {

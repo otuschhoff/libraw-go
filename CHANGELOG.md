@@ -3,6 +3,45 @@
 Notable changes are recorded here. Go module releases use `v`-prefixed
 semantic version tags. Before v1.0.0, the public API may change.
 
+## [0.2.0] - 2026-11-12
+
+Cooperative cancellation and enforced shared memory budgets for in-process
+RAW pipelines. This minor release includes breaking pre-1.0 API changes.
+
+### Changed
+
+- Require `context.Context` in `Open`; extend cooperative cancellation through
+  bounded reads, metadata parsing, descriptor sorting and inner pixel loops.
+- Enforce race-safe shared live-buffer budgets across File, RAW, preview and
+  rendering lifetimes, in addition to existing per-operation limits.
+- Require explicit `Close` on File and returned RAW/preview/render handles.
+  Render returns `*RenderedImage` exposing its standard `*image.NRGBA64`.
+- Metadata diagnostics are borrowed read-only; use `Clone` for an explicitly
+  caller-owned snapshot. See the [migration and safety contract](docs/in-process-safety.md).
+
+### Added
+
+- Caller-owned `Budget` with atomic limit/current/peak reservation statistics,
+  inherited across Open, decoding and rendering or shared across worker pools.
+- Pre-allocation reservations for combined output/scratch buffers and
+  conservative parser storage, with retained-output and shared-metadata lifetimes.
+- Deterministic cancellation/deadline, allocation-rejection, overflow,
+  concurrent-budget and ownership-cleanup tests, plus full-resolution fixture
+  cancellation checks and before/after benchmarks.
+- A compilable timeout/budget pipeline example and documentation of ownership,
+  concurrency, cancellation latency and memory-accounting coverage.
+
+### Limitations
+
+- Cancellation cannot interrupt an already blocked arbitrary `ReaderAt`,
+  allocation/GC pauses or downstream encoders. Reservations remain live while
+  a read is blocked; no read-abandoning helper goroutines are introduced.
+- Budgets bound accounted buffers, not exact Go heap/RSS, caller-owned copies
+  or all dependency allocations. They do not replace subprocess isolation
+  against fatal runtime failures or all memory exhaustion.
+- Close invalidates result data and aliases and must not overlap their use.
+  Camera/layout scope and the unmet historical certification gate are unchanged.
+
 ## [0.1.0] - 2026-11-12
 
 Initial evidence-scoped release of the pure-Go Olympus ORF library and tools.
@@ -61,4 +100,5 @@ See the [E-M5 contract](docs/em5.md), [rendering contract](docs/rendering.md)
 and [historical readiness report](docs/release-readiness.md) for exact scope,
 recorded validation and remaining limitations.
 
+[0.2.0]: https://github.com/otuschhoff/libraw-go/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/otuschhoff/libraw-go/releases/tag/v0.1.0

@@ -4,10 +4,8 @@ package libraw
 
 import (
 	"bytes"
-	"cmp"
 	"encoding/binary"
 	"fmt"
-	"slices"
 
 	"github.com/otuschhoff/libraw-go/internal/bounded"
 	"github.com/otuschhoff/libraw-go/internal/tiff"
@@ -42,7 +40,11 @@ type decodePlan struct {
 func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 	m := p.metadata
 	plan := decodePlan{width: m.Geometry.Width, height: m.Geometry.Height, bits: m.BitDepth.Value, geometry: m.Geometry, cfa: m.CFA.Value}
-	output, err := bounded.Mul(uint64(plan.width)*uint64(plan.height), 2)
+	pixels, err := bounded.Mul(uint64(plan.width), uint64(plan.height))
+	if err != nil {
+		return plan, "", err
+	}
+	output, err := bounded.Mul(pixels, 2)
 	if err != nil {
 		return plan, "", err
 	}
@@ -101,6 +103,9 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 	plan.strips = make([]stripPlan, offsets.Count)
 	word := true
 	for i := range plan.strips {
+		if err := p.source.Check(); err != nil {
+			return plan, "", err
+		}
 		offset, err := offsets.Uint(uint32(i))
 		if err != nil {
 			return plan, "", err
@@ -244,6 +249,9 @@ func (p *parser) payloadExtents(offsets, counts tiff.Entry) error {
 	}
 	spans := make([]fileExtent, offsets.Count)
 	for i := uint32(0); i < offsets.Count; i++ {
+		if err := p.source.Check(); err != nil {
+			return err
+		}
 		offset, err := offsets.Uint(i)
 		if err != nil {
 			return err
@@ -259,27 +267,82 @@ func (p *parser) payloadExtents(offsets, counts tiff.Entry) error {
 			return err
 		}
 		for _, table := range p.tables {
+			if err := p.source.Check(); err != nil {
+				return err
+			}
 			if offset < uint64(table.offset)+table.length && uint64(table.offset) < offset+count {
 				return badEntry(offsets, "payload overlaps a parsed directory table")
 			}
 		}
 		for _, value := range p.values {
+			if err := p.source.Check(); err != nil {
+				return err
+			}
 			if offset < uint64(value.offset)+value.length && uint64(value.offset) < offset+count {
 				return badEntry(offsets, "payload overlaps materialized metadata")
 			}
 		}
 		for _, preview := range p.previews {
+			if err := p.source.Check(); err != nil {
+				return err
+			}
 			if offset < uint64(preview.offset)+preview.length && uint64(preview.offset) < offset+count {
 				return badEntry(offsets, "raw payload overlaps an embedded JPEG extent")
 			}
 		}
 		spans[i] = fileExtent{offset: int64(offset), length: count}
 	}
-	slices.SortFunc(spans, func(a, b fileExtent) int { return cmp.Compare(a.offset, b.offset) })
+	if err := p.sortExtents(spans); err != nil {
+		return err
+	}
 	for i := 1; i < len(spans); i++ {
+		if err := p.source.Check(); err != nil {
+			return err
+		}
 		if uint64(spans[i].offset) < uint64(spans[i-1].offset)+spans[i-1].length {
 			return badEntry(offsets, "overlapping payload extents")
 		}
 	}
 	return nil
+}
+
+// Bottom-up merge sorting permits cancellation during large descriptor sorts.
+// The two 16-byte arrays fit the pre-reserved 64-byte-per-descriptor allowance.
+func (p *parser) sortExtents(spans []fileExtent) error {
+	if err := p.source.Check(); err != nil {
+		return err
+	}
+	if len(spans) < 2 {
+		return p.source.Check()
+	}
+	scratch := make([]fileExtent, len(spans))
+	from, to := spans, scratch
+	for width := 1; width < len(spans); width *= 2 {
+		for start := 0; start < len(spans); start += 2 * width {
+			middle, end := min(start+width, len(spans)), min(start+2*width, len(spans))
+			left, right := start, middle
+			for i := start; i < end; i++ {
+				if i&255 == 0 {
+					if err := p.source.Check(); err != nil {
+						return err
+					}
+				}
+				if left < middle && (right == end || from[left].offset <= from[right].offset) {
+					to[i], left = from[left], left+1
+				} else {
+					to[i], right = from[right], right+1
+				}
+			}
+		}
+		from, to = to, from
+	}
+	for i := range spans {
+		if i&255 == 0 {
+			if err := p.source.Check(); err != nil {
+				return err
+			}
+		}
+		spans[i] = from[i]
+	}
+	return p.source.Check()
 }

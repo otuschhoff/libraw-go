@@ -46,7 +46,7 @@ type fileExtent struct {
 	length uint64
 }
 
-func openORF(source *bounded.Reader, limits Limits) (*File, error) {
+func openORF(source *bounded.Reader, limits Limits, account *bounded.Account) (*File, error) {
 	var header [8]byte
 	if err := source.ReadAt(header[:4], 0); err != nil {
 		return nil, err
@@ -69,12 +69,19 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
+	reader.SetAccount(account)
+	if err := reader.Reserve(2048); err != nil {
+		return nil, err
+	}
 	p := &parser{source: source, reader: reader, limits: limits, visited: map[int64]bool{}}
 	if err := p.imagesAt(int64(first), 1); err != nil {
 		return nil, err
 	}
 	var selected *directory
 	for i := range p.images {
+		if err := p.source.Check(); err != nil {
+			return nil, err
+		}
 		candidate, err := rawCandidate(p.images[i])
 		if err != nil {
 			return nil, err
@@ -165,7 +172,7 @@ func (p *parser) directory(offset, base, depth int64, classic bool, reader *tiff
 		return directory{}, &Error{Op: "IFD graph", Kind: ErrCorrupt, IFD: &offset, Detail: "directory overlaps ORF header"}
 	}
 	p.visited[offset] = true
-	if err := reader.Reserve(128); err != nil {
+	if err := reader.Reserve(512); err != nil {
 		return directory{}, err
 	}
 	ifd, err := reader.ReadDirectory(offset, base, classic, selectTag)
@@ -182,6 +189,9 @@ func (p *parser) directory(offset, base, depth int64, classic bool, reader *tiff
 		length += 4
 	}
 	for _, table := range p.tables {
+		if err := p.source.Check(); err != nil {
+			return directory{}, err
+		}
 		if uint64(offset) < uint64(table.offset)+table.length && uint64(table.offset) < uint64(offset)+length {
 			return directory{}, &Error{Op: "IFD graph", Kind: ErrCorrupt, IFD: &offset, Detail: "overlapping directory tables"}
 		}
@@ -189,6 +199,9 @@ func (p *parser) directory(offset, base, depth int64, classic bool, reader *tiff
 	p.tables = append(p.tables, fileExtent{offset: offset, length: length})
 	d := directory{entries: make(map[uint16]tiff.Entry, len(ifd.Entries)), offset: offset, depth: depth, next: ifd.Next}
 	for _, entry := range ifd.Entries {
+		if err := p.source.Check(); err != nil {
+			return directory{}, err
+		}
 		if _, exists := d.entries[entry.Tag]; exists {
 			tag := entry.Tag
 			return directory{}, &Error{Op: "IFD entries", Kind: ErrCorrupt, IFD: &offset, Tag: &tag, Detail: "duplicate tag"}
@@ -287,8 +300,15 @@ func (p *parser) imageMetadata(d directory) error {
 			*field.dst = text
 		}
 	}
-	m.NormalizedModel = strings.TrimSpace(m.Model)
-	makeName := strings.TrimSpace(m.Make)
+	var err error
+	m.NormalizedModel, err = p.trimText(m.Model)
+	if err != nil {
+		return err
+	}
+	makeName, err := p.trimText(m.Make)
+	if err != nil {
+		return err
+	}
 	if makeName == "OLYMPUS CORPORATION" || makeName == "OLYMPUS IMAGING CORP." {
 		m.NormalizedMake = "Olympus"
 	} else if makeName == "OM Digital Solutions" || makeName == "OM SYSTEM" {
@@ -352,6 +372,27 @@ func (p *parser) text(e tiff.Entry) (string, error) {
 	return e.Text()
 }
 
+func (p *parser) trimText(text string) (string, error) {
+	left, right := 0, len(text)
+	for left < right && strings.IndexByte(" \t\n\v\f\r", text[left]) >= 0 {
+		if left&4095 == 0 {
+			if err := p.source.Check(); err != nil {
+				return "", err
+			}
+		}
+		left++
+	}
+	for right > left && strings.IndexByte(" \t\n\v\f\r", text[right-1]) >= 0 {
+		if right&4095 == 0 {
+			if err := p.source.Check(); err != nil {
+				return "", err
+			}
+		}
+		right--
+	}
+	return text[left:right], p.source.Check()
+}
+
 func (p *parser) exifAt(offset, depth int64) error {
 	d, err := p.directory(offset, 0, depth, true, p.reader, func(tag uint16) bool {
 		switch tag {
@@ -396,7 +437,9 @@ func (p *parser) exifAt(offset, depth int64) error {
 			return badEntry(e, "expected 2x2 EXIF CFA encoding")
 		}
 		if binary.LittleEndian.Uint16(e.Data) != 2 || binary.LittleEndian.Uint16(e.Data[2:]) != 2 {
-			p.diagnostic("unsupported-cfa", "EXIF CFA is not 2x2 Bayer", "EXIF/0xa302")
+			if err := p.diagnostic("unsupported-cfa", "EXIF CFA is not 2x2 Bayer", "EXIF/0xa302"); err != nil {
+				return err
+			}
 		} else {
 			var cfa CFA
 			greens := 0
@@ -425,7 +468,9 @@ func (p *parser) exifAt(offset, depth int64) error {
 			if valid && counts == [3]int{1, 2, 1} && greenDiagonal {
 				p.metadata.CFA = fileValue(cfa, "EXIF/0xa302")
 			} else {
-				p.diagnostic("unsupported-cfa", "EXIF CFA is not regular Bayer", "EXIF/0xa302")
+				if err := p.diagnostic("unsupported-cfa", "EXIF CFA is not regular Bayer", "EXIF/0xa302"); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -476,8 +521,14 @@ func numbers(e tiff.Entry, typ tiff.Type, count uint32) ([]uint64, error) {
 	return values, nil
 }
 
-func (p *parser) diagnostic(code, message, source string) {
+func (p *parser) diagnostic(code, message, source string) error {
+	// Double the element allowance covers append capacity growth and both
+	// old/new arrays during replacement. Strings may be parser-generated.
+	if err := p.reader.Reserve(192 + uint64(len(code)) + uint64(len(message)) + uint64(len(source))); err != nil {
+		return err
+	}
 	p.metadata.Diagnostics = append(p.metadata.Diagnostics, Diagnostic{Code: code, Message: message, Source: source})
+	return nil
 }
 
 func (p *parser) finishCalibration() error {

@@ -67,15 +67,17 @@ func export(ctx context.Context, path, output, format string, opts libraw.Render
 	if err != nil {
 		return err
 	}
-	file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+	file, err := libraw.Open(ctx, input, info.Size(), libraw.OpenOptions{})
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	if format == "preview" {
 		preview, err := file.Preview(ctx)
 		if err != nil {
 			return err
 		}
+		defer preview.Close()
 		return publish(ctx, output, func(w io.Writer) error {
 			_, err := io.Copy(w, bytes.NewReader(preview.JPEG))
 			return err
@@ -85,6 +87,7 @@ func export(ctx context.Context, path, output, format string, opts libraw.Render
 	if err != nil {
 		return err
 	}
+	defer raw.Close()
 	if format == "raw" {
 		return publish(ctx, output, func(w io.Writer) error { return writeRaw(ctx, w, raw) })
 	}
@@ -92,6 +95,7 @@ func export(ctx context.Context, path, output, format string, opts libraw.Render
 	if err != nil {
 		return err
 	}
+	defer rgb.Close()
 	return publish(ctx, output, func(w io.Writer) error { return png.Encode(w, rgb) })
 }
 

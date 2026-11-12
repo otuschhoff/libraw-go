@@ -1,7 +1,7 @@
 # Phase 6: calibrated deterministic development
 
 Phase 6 implements `Render(ctx, raw, RenderOptions)` independently of RAW
-decoding. It returns caller-owned, opaque `image.NRGBA64` pixels encoded as
+decoding. It returns a closable `RenderedImage` exposing opaque `image.NRGBA64` pixels encoded as
 sRGB. It is a basic bilinear developer, not LibRaw postprocessing parity,
 automatic white balance, tone mapping, or camera-JPEG matching.
 
@@ -44,7 +44,9 @@ calibration, **not** that unread sensor data is valid. An unavailable render
 capability has an actionable reason. Explicit overrides can enable a standalone
 `Render` even when default rendering is unavailable. Rendering uses its own
 `RenderOptions.Limits`; pass the same limits as `Open` when maintaining the same
-policy across operations. Limits are per operation, not a simultaneous-memory cap.
+policy across operations. Limits are per operation; an inherited/shared Budget
+also bounds simultaneously live buffers, including retained RAW and rendered
+output. See [in-process safety](in-process-safety.md) for lifetimes and migration.
 
 ## Options and ownership
 
@@ -80,7 +82,8 @@ orientation otherwise requires an explicit decision rather than guessing.
 RAW pixels, diagnostics, calibration and options are never changed or retained.
 Every successful output has independent storage, including across concurrent
 calls. Callers must not change the RAW/options while they are being rendered.
-The caller-owned RAW plane is not counted again in rendering's working quota.
+The RAW plane is not counted again in rendering's per-operation working quota,
+but library-produced RAW remains charged to its inherited Budget until Close.
 
 ## Exact stage conventions
 

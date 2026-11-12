@@ -195,14 +195,17 @@ The following is the intended API shape; define supporting types and settle
 exact names in phase 1 before exposing a stable release:
 
 ```go
-func Open(r io.ReaderAt, size int64, opts OpenOptions) (*File, error)
+func Open(ctx context.Context, r io.ReaderAt, size int64, opts OpenOptions) (*File, error)
 
 func (f *File) Metadata() Metadata
 func (f *File) Capabilities() Capabilities
 func (f *File) DecodeRaw(ctx context.Context) (*RawImage, error)
 func (f *File) Preview(ctx context.Context) (*Preview, error)
 
-func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGBA64, error)
+func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*RenderedImage, error)
+
+func NewBudget(bytes int64) (*Budget, error)
+// File, RawImage, Preview and RenderedImage implement Close() error.
 ```
 
 ### 4.1 Input and ownership
@@ -211,12 +214,16 @@ func Render(ctx context.Context, raw *RawImage, opts RenderOptions) (*image.NRGB
   it does not allocate the full raw image or decode the preview.
 - The caller owns the `ReaderAt` and keeps it alive and unchanged for the
   lifetime of `File`. There is no library-owned descriptor to close.
-- A `File` has immutable internal metadata. Metadata access returns values
-  or defensive copies; returned slices must not expose internal state.
+- A `File` has immutable internal metadata. Metadata access returns a value
+  with borrowed, read-only diagnostics. Clone makes an explicitly unbudgeted
+  caller-owned snapshot.
 - Decode calls use independent state and buffers. Concurrent calls are
   supported when the supplied `ReaderAt` supports concurrent reads.
 - Successful image and preview results are caller-owned, with no aliases to
   library caches. No global mutable decoder state.
+- Close File and all successful output handles. Their inherited/shared Budget
+  holds reservations until the relevant handles close; see the current
+  [in-process safety contract](docs/in-process-safety.md).
 - Do not add an `io.Reader` API that silently buffers the entire input.
 - On failure, return no partially valid image or success-shaped fallback.
 
@@ -472,7 +479,8 @@ integer/range checks. These are engineering defaults, not format limits.
 - No panic recovery as a substitute for validating input.
 - Do not require the caller's `ReaderAt` to be interruptible. Cancellation is
   checked between bounded reads/rows; it cannot interrupt a blocked caller I/O.
-- Document that limits are per operation, not a global concurrent-process cap.
+- Limits are per operation. Budget additionally accounts for aggregate live
+  buffers across handles and concurrent calls, not process heap/RSS.
 
 ## 7. M2 rendering contract
 

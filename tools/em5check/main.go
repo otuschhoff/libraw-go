@@ -189,11 +189,12 @@ func inventory(ctx context.Context, root string, perMode int) ([]sample, report,
 		if err != nil {
 			return err
 		}
-		file, err := libraw.Open(input, stat.Size(), libraw.OpenOptions{})
+		file, err := libraw.Open(ctx, input, stat.Size(), libraw.OpenOptions{})
 		if err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
-		m := file.Metadata()
+		defer file.Close()
+		m := file.Metadata().Clone()
 		if m.NormalizedMake != "Olympus" || m.NormalizedModel != "E-M5" || m.CameraID.Value != "S0036" ||
 			m.Geometry.Width != 4640 || m.Geometry.Height != 3472 || m.BitDepth.Value != 12 ||
 			m.Geometry.ActiveArea.Value != image.Rect(8, 8, 4616, 3464) ||
@@ -267,10 +268,11 @@ func check(ctx context.Context, s sample, reference, scratch string) (count int,
 	if err != nil {
 		return 0, err
 	}
-	file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+	file, err := libraw.Open(ctx, input, info.Size(), libraw.OpenOptions{})
 	if err != nil {
 		return 0, err
 	}
+	defer file.Close()
 	if !reflect.DeepEqual(file.Metadata(), s.metadata) {
 		return 0, errors.New("input metadata changed during validation")
 	}
@@ -278,6 +280,7 @@ func check(ctx context.Context, s sample, reference, scratch string) (count int,
 	if err != nil {
 		return 0, err
 	}
+	defer raw.Close()
 	if native.Version != "0.21.4-Release" || native.Decoder != "olympus_load_raw()" ||
 		native.CameraID != "S0036" || native.Errors != 0 || native.Width != raw.Width || native.Height != raw.Height ||
 		native.Bits != raw.BitDepth || native.Count != len(raw.Pixels) || native.Export != [4]int{0, 0, raw.Width, raw.Height} ||
@@ -353,10 +356,11 @@ func parity(ctx context.Context, input *os.File, file *libraw.File, raw *libraw.
 		return err
 	}
 	before := sha256.Sum256(data)
-	memory, err := libraw.Open(bytes.NewReader(data), int64(len(data)), libraw.OpenOptions{})
+	memory, err := libraw.Open(ctx, bytes.NewReader(data), int64(len(data)), libraw.OpenOptions{})
 	if err != nil {
 		return err
 	}
+	defer memory.Close()
 	if !reflect.DeepEqual(memory.Metadata(), file.Metadata()) || memory.Capabilities() != file.Capabilities() {
 		return errors.New("metadata/capability ReaderAt parity failure")
 	}
@@ -364,31 +368,38 @@ func parity(ctx context.Context, input *os.File, file *libraw.File, raw *libraw.
 	if err != nil {
 		return err
 	}
+	defer preview.Close()
 	otherPreview, err := memory.Preview(ctx)
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(preview, otherPreview) {
+	defer otherPreview.Close()
+	if !bytes.Equal(preview.JPEG, otherPreview.JPEG) || preview.Width != otherPreview.Width || preview.Height != otherPreview.Height ||
+		preview.Orientation != otherPreview.Orientation || !reflect.DeepEqual(preview.Diagnostics, otherPreview.Diagnostics) {
 		return errors.New("preview ReaderAt parity failure")
 	}
 	otherRaw, err := memory.DecodeRaw(ctx)
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(raw, otherRaw) {
+	defer otherRaw.Close()
+	if !reflect.DeepEqual(rawData(raw), rawData(otherRaw)) {
 		return errors.New("RAW ReaderAt parity failure")
 	}
 	rgb, err := libraw.Render(ctx, raw, libraw.RenderOptions{})
 	if err != nil {
 		return err
 	}
+	defer rgb.Close()
 	otherRGB, err := libraw.Render(ctx, otherRaw, libraw.RenderOptions{})
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(rgb, otherRGB) {
+	defer otherRGB.Close()
+	if !reflect.DeepEqual(rgb.NRGBA64, otherRGB.NRGBA64) {
 		return errors.New("render ReaderAt parity failure")
 	}
+
 	width, height := raw.ActiveArea.Dx(), raw.ActiveArea.Dy()
 	if raw.Orientation >= libraw.OrientationLeftTop {
 		width, height = height, width
@@ -411,4 +422,12 @@ func parity(ctx context.Context, input *os.File, file *libraw.File, raw *libraw.
 		return errors.New("input mutation or result aliasing")
 	}
 	return nil
+}
+
+func rawData(raw *libraw.RawImage) libraw.RawImage {
+	return libraw.RawImage{
+		Pixels: raw.Pixels, Width: raw.Width, Height: raw.Height, Stride: raw.Stride,
+		ActiveArea: raw.ActiveArea, CFA: raw.CFA, BitDepth: raw.BitDepth,
+		Calibration: raw.Calibration, Orientation: raw.Orientation, Diagnostics: raw.Diagnostics,
+	}
 }

@@ -2,7 +2,11 @@
 
 package libraw
 
-import "image"
+import (
+	"image"
+
+	"github.com/otuschhoff/libraw-go/internal/bounded"
+)
 
 // Origin identifies the provenance of a present value; zero means unavailable.
 type Origin uint8
@@ -140,8 +144,13 @@ type Capabilities struct {
 // and len(Pixels) equals Stride*Height. ActiveArea is half-open and CFA is
 // anchored to the uncropped plane. An empty ActiveArea means the file supplied
 // no verified crop; the full sensor plane is still retained, not guessed to be
-// an active crop. Callers may mutate their own results.
+// an active crop. Callers may mutate samples while not in use, but must not
+// replace library-owned backing slices. Close releases this result's budget
+// reservation and invalidates its data and aliases.
 type RawImage struct {
+	owner       *metadataOwner
+	budget      *Budget
+	account     *bounded.Account
 	Pixels      []uint16
 	Width       int
 	Height      int
@@ -156,8 +165,11 @@ type RawImage struct {
 
 // Preview owns original embedded JPEG bytes, not a decoded/re-encoded image.
 // Orientation describes the transform needed to display these bytes, not an
-// assumption that its encoded pixels share the sensor's orientation.
+// assumption that its encoded pixels share the sensor's orientation. Close
+// releases its reservation and invalidates its data and aliases.
 type Preview struct {
+	owner       *metadataOwner
+	account     *bounded.Account
 	JPEG        []byte
 	Width       int
 	Height      int

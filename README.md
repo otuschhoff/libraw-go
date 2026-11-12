@@ -2,17 +2,22 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-## Version 0.1.0
+## Version 0.2.0
 
-The initial release is tagged `v0.1.0`. See the [changelog](CHANGELOG.md)
+The current release is tagged `v0.2.0`. See the [changelog](CHANGELOG.md)
 for its features, scope and limitations. Install the Go module with:
 
 ```sh
-go get github.com/otuschhoff/libraw-go@v0.1.0
+go get github.com/otuschhoff/libraw-go@v0.2.0
 ```
 
 This is an early, evidence-scoped release, not camera-wide certification.
 The API may change before v1.0.0.
+
+**Breaking changes from v0.1.0:** `Open` now takes a context, returned handles must
+be closed, and an inherited/shared `Budget` accounts for live buffers across
+stages and concurrent operations. See [in-process safety and migration](docs/in-process-safety.md)
+for guarantees, limitations and a timeout/budget pipeline example.
 
 **Active scope: Olympus OM-D E-M5 / S0036 only**, matching the local personal
 ORFs: 12-bit legacy predictive RAW, 4640x3472 sensor, 4608x3456 active crop.
@@ -29,7 +34,7 @@ goal. Exact sensor-code decoding is available for the evidenced
 `olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
 metadata, embedded JPEGs, `orfinfo` and `orfexport`. Basic independent sRGB rendering is
 implemented for explicitly calibrated Bayer images. This is a
-layout-scoped source milestone, not camera/mode certification. The v0.1.0
+layout-scoped source milestone, not camera/mode certification. The v0.2.0
 release does not waive that historical certification gate. See the
 [Phase 7 readiness and release gate](docs/release-readiness.md).**
 
@@ -167,7 +172,7 @@ diagnostic storage: `2*width*height + 4096 + 64*diagnosticCount` accounted bytes
 No whole compressed strip, extra predictor rows, or second image is allocated.
 Exact working-quota boundaries are checked before allocation/read and reflected
 in capabilities. Calls have independent state, support concurrent `ReaderAt`s,
-and poll cancellation between rows and before success. Error context identifies
+and poll cancellation within rows, during reads and before success. Error context identifies
 the failing sample's byte/bit position and row/column; underlying I/O errors and
 missing-field positions remain wrapped.
 
@@ -292,13 +297,13 @@ Before allocation, the operation checks platform-sized byte/element counts and
 the sum of one output plane, one input row, and diagnostic storage:
 `2*width*height + 2*width + 64*diagnosticCount` accounted bytes. The diagnostic
 allowance includes the unknown-crop diagnostic if needed. No second plane or
-whole-file buffer is allocated. Retained `File` metadata and Go runtime
-allocation rounding/GC/RSS are not per-call buffer-size guarantees.
+whole-file buffer is allocated. Retained `File` metadata is additionally held
+in the shared Budget. Go runtime allocation rounding/GC/RSS are not covered.
 
 Calls use independent output/scratch/diagnostic buffers and never close the
-input. Concurrent calls require a concurrent `ReaderAt`, and their quotas are
-per call, not a global concurrent-memory cap. Cancellation is checked between
-rows and before success; the API cannot interrupt a blocked caller-supplied
+input. Concurrent calls require a concurrent `ReaderAt`. Limits remain per
+call; the inherited/shared Budget additionally counts simultaneous buffers.
+Cancellation is checked within rows, during reads and before success; the API cannot interrupt a blocked caller-supplied
 `ReadAt`. Short reads, real errors (even combined with EOF on a full read), and
 cancellation preserve their causes and never return a partially filled image.
 
@@ -367,11 +372,12 @@ info, err := input.Stat()
 if err != nil {
     return err
 }
-file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+file, err := libraw.Open(context.Background(), input, info.Size(), libraw.OpenOptions{})
 if err != nil {
     return err
 }
-metadata := file.Metadata() // defensive snapshot; geometry is sensor-native
+defer file.Close()
+metadata := file.Metadata().Clone() // unbudgeted snapshot; geometry is sensor-native
 capabilities := file.Capabilities()
 _ = metadata
 if capabilities.Preview.Available {
@@ -379,6 +385,7 @@ if capabilities.Preview.Available {
     if err != nil {
         return err
     }
+    defer preview.Close()
     _ = preview.JPEG // original bytes, not a sensor decode or a re-encode
 }
 ```
@@ -386,7 +393,8 @@ if capabilities.Preview.Available {
 `Open` borrows the caller-owned, unchanged `io.ReaderAt`. It never closes it,
 buffers the whole file, allocates a raw plane, or decodes JPEG pixels.
 Concurrent operations require concurrent-read support from that reader.
-Every metadata/preview result is independently caller-owned.
+Preview results must be closed. Metadata diagnostics are borrowed read-only;
+`Clone` makes an explicitly caller-owned snapshot.
 
 The implemented parsing surface is deliberately narrow:
 
@@ -542,8 +550,9 @@ _ = limits // supply these resolved budgets to later file operations
 
 Default limits are 1 GiB input, 100 million pixels, 32768 pixels per dimension,
 128 IFDs, depth 16, 4096 entries per IFD, 16 MiB materialized metadata, 64 MiB
-preview, and 1 GiB accounted working buffers. Limits are per operation, not
-process/RSS guarantees. Raising them never disables overflow or platform-int
+preview, and 1 GiB accounted working buffers. Limits are per operation; shared
+Budget reservations span stages and concurrent results, not process/RSS.
+Raising limits never disables overflow or platform-int
 checks. A lowered working-buffer budget must still cover the resolved
 metadata and preview limits, and resolved depth must not exceed the IFD quota.
 

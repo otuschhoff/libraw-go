@@ -1,7 +1,9 @@
 # Phase 7: usable engineering milestone, release blocked
 
-**v0.1.0 release scope:** the initial tagged release covers the implemented,
+**v0.2.0 release scope:** the tagged release covers the implemented,
 evidence-scoped library and commands, with E-M5/S0036 as the active target.
+It adds cooperative cancellation, shared budgets and explicit ownership to
+the initial v0.1.0 release; see [in-process safety](in-process-safety.md).
 It is not the historical four-camera certified M1+M2 release described below
 and does not waive its unmet certification requirements. See the
 [changelog](../CHANGELOG.md) for the release summary.
@@ -98,31 +100,35 @@ explicit buffer budget.
 
 The [public examples](../example_test.go) compile against the exported API.
 For a filesystem input, open an `*os.File`, obtain its size, call
-`libraw.Open(input, size, opts)` and keep it open until operations finish.
-The library borrows the immutable input; `File` has no `Close` method.
+`libraw.Open(ctx, input, size, opts)` and keep it open until operations finish.
+The library borrows the immutable input. Close File and all successful output
+handles; see [in-process safety](in-process-safety.md) for the current contract.
 
 An in-memory input uses exactly the same API, with no new buffering layer:
 
 ```go
 func decodeMemory(ctx context.Context, data []byte) (*libraw.RawImage, error) {
-    file, err := libraw.Open(bytes.NewReader(data), int64(len(data)), libraw.OpenOptions{})
+    file, err := libraw.Open(ctx, bytes.NewReader(data), int64(len(data)), libraw.OpenOptions{})
     if err != nil {
         return nil, err
     }
-    return file.DecodeRaw(ctx)
+    defer file.Close()
+    return file.DecodeRaw(ctx) // The caller must Close the successful result.
 }
 ```
 
-Keep the backing bytes immutable while the file is in use. Metadata snapshots,
-preview bytes, RAW samples and rendered pixels belong to the caller; results
+Keep the backing bytes immutable while the file is in use. Preview bytes, RAW
+samples and rendered pixels belong to the caller until Close; results
 do not alias each other or the borrowed input. Concurrent calls require a
 concurrency-safe immutable `ReaderAt`, and callers must not mutate shared
-RAW/options during rendering.
+RAW/options during rendering. Metadata diagnostics are borrowed read-only;
+use Clone for an unbudgeted caller-owned snapshot.
 
 Zero `OpenOptions` resolve bounded defaults, not unlimited input. Rendering
 uses separate `RenderOptions.Limits`; pass the same limits explicitly if
-maintaining one policy across operations. Limits apply per operation, not to
-the sum of concurrent results or PNG encoding. See the [API/M1 contract](m1.md)
+maintaining one policy across operations. Limits apply per operation; the
+inherited/shared Budget also bounds concurrent results, but not PNG encoding.
+See the [API/M1 contract](m1.md)
 and [rendering contract](rendering.md) for precise quotas and defaults.
 
 Use `errors.Is` for typed failures such as `ErrNotORF`, `ErrTruncated`,

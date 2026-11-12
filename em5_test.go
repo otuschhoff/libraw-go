@@ -4,6 +4,7 @@ package libraw
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -40,7 +41,7 @@ func TestEM5WhiteBalanceEncoding(t *testing.T) {
 					binary.LittleEndian.PutUint16(data[7400+i*2:], uint16(v))
 				}
 			}
-			file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+			file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 			if (err == nil) != test.ok {
 				t.Fatalf("WB acceptance=%v: %v", test.ok, err)
 			}
@@ -66,7 +67,7 @@ func TestEM5ModesAndProfileScope(t *testing.T) {
 		modes = append(modes, fmt.Sprintf("SpecialMode=2 %d 0;DriveMode=5 %d 1", i, i))
 	}
 	for _, mode := range modes {
-		p := parser{cameraID: "S0036", mode: mode}
+		p := parser{reader: profileTestReader(), cameraID: "S0036", mode: mode}
 		p.metadata.NormalizedMake, p.metadata.NormalizedModel = "Olympus", "E-M5"
 		plan := decodePlan{width: 4640, height: 3472, bits: 12, layout: "olympus-legacy-predictive12"}
 		if !em5CaptureMode(mode) {
@@ -122,7 +123,7 @@ func TestEM5ModesAndProfileScope(t *testing.T) {
 
 func TestEM5GeometryRequiredForDecoder(t *testing.T) {
 	data := em5TestORF("E-M5", "S0036")
-	file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +206,7 @@ func FuzzEM5Metadata(f *testing.F) {
 		for i, value := range []uint16{red, blue, green1, green2} {
 			binary.LittleEndian.PutUint16(data[7400+i*2:], value)
 		}
-		file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{
+		file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{
 			Limits: Limits{InputBytes: 32768, Pixels: 1024, Dimension: 64, MetadataBytes: 32768,
 				PreviewBytes: 1, WorkingBytes: 65536, IFDs: 16, Depth: 8, EntriesPerIFD: 64},
 		})

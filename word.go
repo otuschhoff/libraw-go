@@ -9,8 +9,9 @@ import (
 	"github.com/otuschhoff/libraw-go/internal/bounded"
 )
 
-// rawResources accounts for explicit per-call buffers, not retained File
-// metadata or Go runtime RSS. The diagnostic allowance covers each slice
+// rawResources checks explicit per-call buffers. Shared Budget accounting also
+// retains File metadata and other live results, but not Go runtime RSS.
+// The diagnostic allowance covers each slice
 // element (three strings) on both 32- and 64-bit platforms.
 func (f *File) rawResources() (pixels, rowBytes, diagnostics int, err error) {
 	diagnostics = len(f.metadata.Diagnostics)
@@ -49,6 +50,20 @@ func (f *File) decodeWord(ctx context.Context) (*RawImage, error) {
 	if err != nil {
 		return nil, err
 	}
+	account, err := f.reserveRaw()
+	if err != nil {
+		return nil, err
+	}
+	success := false
+	defer func() {
+		if !success {
+			account.Close()
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return nil, &Error{Op: "decode raw", Cause: err}
+	}
+	source := f.source.WithContext(ctx)
 	pixels := make([]uint16, count)
 	row := make([]byte, rowBytes)
 	for _, strip := range f.plan.strips {
@@ -57,13 +72,18 @@ func (f *File) decodeWord(ctx context.Context) (*RawImage, error) {
 				return nil, &Error{Op: "decode raw", Cause: err, Layout: f.plan.layout}
 			}
 			offset := strip.offset + int64(y*f.plan.rowBytes)
-			if err := f.source.ReadAt(row, offset); err != nil {
+			if err := source.ReadAt(row, offset); err != nil {
 				position := offset
 				return nil, &Error{Op: "decode raw row", Cause: err, Offset: &position, Layout: f.plan.layout}
 			}
 			start := int((strip.row + y) * uint64(f.plan.width))
 			output := pixels[start : start+f.plan.width]
 			for x := range output {
+				if x&255 == 0 {
+					if err := ctx.Err(); err != nil {
+						return nil, &Error{Op: "decode raw", Cause: err}
+					}
+				}
 				output[x] = binary.LittleEndian.Uint16(row[x*2:]) >> f.plan.rightShift
 			}
 		}
@@ -71,7 +91,29 @@ func (f *File) decodeWord(ctx context.Context) (*RawImage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, &Error{Op: "decode raw", Cause: err, Layout: f.plan.layout}
 	}
-	return f.rawImage(pixels, diagnosticCount), nil
+	raw := f.rawImage(pixels, diagnosticCount)
+	account.Release(f.plan.scratchBytes)
+	raw.budget, raw.account = f.budget, account
+	raw.owner = f.owner
+	raw.owner.retain()
+	success = true
+	return raw, nil
+}
+
+func (f *File) reserveRaw() (*bounded.Account, error) {
+	_, account, err := operationAccount(f.budget, f.limits.WorkingBytes)
+	if err != nil {
+		return nil, err
+	}
+	// rawResources checked the overflow-safe sum and platform allocation sizes.
+	diagnostics := len(f.metadata.Diagnostics)
+	if !f.metadata.Geometry.ActiveArea.Present() {
+		diagnostics++
+	}
+	if err := account.Reserve(f.plan.outputBytes + f.plan.scratchBytes + uint64(diagnostics)*64); err != nil {
+		return nil, err
+	}
+	return account, nil
 }
 
 func (f *File) rawImage(pixels []uint16, diagnosticCount int) *RawImage {

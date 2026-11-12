@@ -21,6 +21,11 @@ import (
 
 func wordORF(width, height, rows int) ([]byte, []uint16) {
 	data := makeTestORF(false)
+	if required := 8192 + width*height*2; required > len(data) {
+		grown := make([]byte, required)
+		copy(grown, data)
+		data = grown
+	}
 	for tag, value := range map[uint16]int{0x100: width, 0x101: height, 0x116: rows} {
 		binary.LittleEndian.PutUint32(recordAt(data, 8, tag)[8:], uint32(value))
 	}
@@ -128,7 +133,7 @@ func TestWordOwnershipConcurrencyAndUnknownCrop(t *testing.T) {
 func TestWordWorkingQuotaAndNoPayloadReadOnOpen(t *testing.T) {
 	data, _ := wordORF(16, 8, 3)
 	reader := &rawReader{input: bytes.NewReader(data)}
-	file, err := Open(reader, int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 	if err != nil || reader.calls != 0 {
 		t.Fatalf("Open decoded/buffered raw: %v, %d reads", err, reader.calls)
 	}
@@ -166,6 +171,7 @@ func TestWordWorkingQuotaAndNoPayloadReadOnOpen(t *testing.T) {
 	}
 	largeNeeded := limited.plan.outputBytes + limited.plan.scratchBytes + uint64(len(limited.metadata.Diagnostics))*64
 	for _, delta := range []int64{-1, 0, 1} {
+		opts.Budget, _ = NewBudget(1 << 30)
 		opts.Limits.WorkingBytes = int64(largeNeeded) + delta
 		f := openTest(t, large, opts)
 		if f.Capabilities().Raw.Available != (delta >= 0) {
@@ -188,7 +194,7 @@ func TestWordIOFailureAndCancellation(t *testing.T) {
 	for _, mode := range []string{"disk", "short", "short nil", "full error", "joined EOF", "cancel first", "cancel last", "deadline"} {
 		t.Run(mode, func(t *testing.T) {
 			reader := &rawReader{input: bytes.NewReader(data)}
-			file, err := Open(reader, int64(len(data)), OpenOptions{})
+			file, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -241,7 +247,7 @@ func TestWordIOFailureAndCancellation(t *testing.T) {
 		t.Fatalf("nil file: %v", err)
 	}
 	reader := &rawReader{input: bytes.NewReader(data), fullErr: true, err: io.EOF}
-	file, err := Open(reader, int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +302,7 @@ func TestWordRejectsUnevidencedEncoding(t *testing.T) {
 			if value == 3 {
 				binary.LittleEndian.PutUint16(data[180:], uint16(tiff.Byte))
 			}
-			file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+			file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 			if value == 3 {
 				if file != nil || !errors.Is(err, ErrCorrupt) {
 					t.Fatalf("malformed encoding control %04x accepted: %v", control.tag, err)
@@ -338,7 +344,7 @@ func TestWordRejectsUnevidencedEncoding(t *testing.T) {
 				at := binary.LittleEndian.Uint32(recordAt(data, 8, 0x110)[8:])
 				data[at] = 'X'
 			}
-			file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+			file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 			if mode == "big endian" {
 				if file != nil || !errors.Is(err, ErrUnsupported) {
 					t.Fatal("unevidenced byte order accepted")
@@ -370,7 +376,7 @@ func TestWordTruncatedPayloadAndStripArrays(t *testing.T) {
 			case "count array":
 				binary.LittleEndian.PutUint32(recordAt(data, 8, 0x117)[8:], uint32(len(data)-1))
 			}
-			if file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{}); file != nil || !errors.Is(err, ErrTruncated) {
+			if file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{}); file != nil || !errors.Is(err, ErrTruncated) {
 				t.Fatalf("truncated word layout returned a File: %v", err)
 			}
 		})
@@ -379,7 +385,7 @@ func TestWordTruncatedPayloadAndStripArrays(t *testing.T) {
 
 func BenchmarkDecodeWord(b *testing.B) {
 	data, _ := wordORF(31, 31, 7)
-	file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -387,9 +393,11 @@ func BenchmarkDecodeWord(b *testing.B) {
 	b.SetBytes(31 * 31 * 2)
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := file.DecodeRaw(context.Background()); err != nil {
+		result, err := file.DecodeRaw(context.Background())
+		if err != nil {
 			b.Fatal(err)
 		}
+		result.Close()
 	}
 }
 

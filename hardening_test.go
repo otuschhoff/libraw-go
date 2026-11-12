@@ -90,7 +90,7 @@ func TestRawArithmeticAtPlatformBoundary(t *testing.T) {
 		}
 		reader := &metadataOnlyReader{input: bytes.NewReader(data), allowPrefix: modern}
 		opts := OpenOptions{Limits: Limits{InputBytes: 1 << 33, Pixels: 1 << 30, WorkingBytes: 128 << 20}}
-		file, err := Open(reader, size, opts)
+		file, err := Open(context.Background(), reader, size, opts)
 		if strconv.IntSize == 32 {
 			if file != nil || !errors.Is(err, ErrLimitExceeded) {
 				t.Fatalf("2 GiB output must exceed platform int before allocation: %v", err)
@@ -116,14 +116,14 @@ func TestConcurrentFileOperations(t *testing.T) {
 	copy(data[8199:], payload)
 	binary.LittleEndian.PutUint32(recordAt(data, 8, 0x117)[8:], uint32(7+len(payload)))
 	file := openTest(t, data, OpenOptions{})
-	before, caps := file.Metadata(), file.Capabilities()
+	before, caps := file.Metadata().Clone(), file.Capabilities()
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for range 10 {
-				metadata := file.Metadata()
+				metadata := file.Metadata().Clone()
 				if !reflect.DeepEqual(metadata, before) || file.Capabilities() != caps {
 					t.Error("metadata/capabilities changed during concurrent operations")
 					return
@@ -145,15 +145,15 @@ func TestConcurrentFileOperations(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if !reflect.DeepEqual(before, file.Metadata()) {
+	if !reflect.DeepEqual(before, file.Metadata().Clone()) {
 		t.Fatal("operation results alias retained metadata")
 	}
 }
 
 func checkFuzzOperations(t *testing.T, file *File) {
 	t.Helper()
-	m := file.Metadata()
-	if !reflect.DeepEqual(m, file.Metadata()) || file.Capabilities().Render.Available ||
+	m := file.Metadata().Clone()
+	if !reflect.DeepEqual(m, file.Metadata().Clone()) || file.Capabilities().Render.Available ||
 		(file.Capabilities().Raw.Available && m.Layout.Value != "olympus-word16le-high12" && m.Layout.Value != "olympus-legacy-predictive12") {
 		t.Fatal("unstable metadata or false capabilities")
 	}
@@ -169,7 +169,7 @@ func checkFuzzOperations(t *testing.T, file *File) {
 	} else if !file.Capabilities().Raw.Available || raw.Stride != raw.Width || len(raw.Pixels) != raw.Width*raw.Height {
 		t.Fatal("invalid decoded raw shape or capability")
 	}
-	if !reflect.DeepEqual(m, file.Metadata()) {
+	if !reflect.DeepEqual(m, file.Metadata().Clone()) {
 		t.Fatal("decoding mutated metadata")
 	}
 }
@@ -187,7 +187,7 @@ func FuzzMakerNotes(f *testing.F) {
 		copy(data[1024+int(at)%1024:2048], mutation)
 		opts := OpenOptions{Limits: Limits{InputBytes: 32768, MetadataBytes: 32768, PreviewBytes: 1, WorkingBytes: 65536,
 			Pixels: 1024, Dimension: 64, IFDs: 16, Depth: 8, EntriesPerIFD: 64}}
-		file, err := Open(bytes.NewReader(data), int64(len(data)), opts)
+		file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), opts)
 		if err != nil {
 			if file != nil {
 				t.Fatal("partial file on malformed MakerNote")

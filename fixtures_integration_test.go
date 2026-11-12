@@ -88,7 +88,7 @@ func TestReferenceFixtureMetadataAndPreviews(t *testing.T) {
 				rawStart = 650752
 			}
 			spy := &fixtureReader{input: input, rawStart: rawStart, allowPrefix: !word}
-			file, err := Open(spy, info.Size(), OpenOptions{})
+			file, err := Open(context.Background(), spy, info.Size(), OpenOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

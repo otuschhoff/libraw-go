@@ -5,8 +5,10 @@
 package tiff
 
 import (
+	"context"
 	"encoding/binary"
 	"math"
+	"strings"
 
 	"github.com/otuschhoff/libraw-go/internal/bounded"
 	"github.com/otuschhoff/libraw-go/internal/fault"
@@ -54,6 +56,7 @@ type Entry struct {
 	Offset int64
 	Data   []byte
 	order  binary.ByteOrder
+	ctx    context.Context
 }
 
 type IFD struct {
@@ -70,6 +73,27 @@ type Reader struct {
 	order      binary.ByteOrder
 	maxEntries uint64
 	remaining  *uint64
+	account    *bounded.Account
+}
+
+func (r *Reader) SetAccount(account *bounded.Account) { r.account = account }
+
+// AccountReserve/Release bound transient parser buffers outside the cumulative
+// metadata materialization quota.
+func (r *Reader) AccountReserve(bytes uint64) error {
+	if err := r.source.Check(); err != nil {
+		return err
+	}
+	if r.account == nil {
+		return nil
+	}
+	return r.account.Reserve(bytes)
+}
+
+func (r *Reader) AccountRelease(bytes uint64) {
+	if r.account != nil {
+		r.account.Release(bytes)
+	}
 }
 
 // New accepts only explicit little/big endian order and positive budgets.
@@ -83,8 +107,19 @@ func New(source *bounded.Reader, order binary.ByteOrder, maxEntries, budget uint
 }
 
 func (r *Reader) charge(bytes uint64) error {
+	if err := r.source.Check(); err != nil {
+		return err
+	}
+	if _, err := bounded.Int(bytes); err != nil {
+		return err
+	}
 	if bytes > *r.remaining {
 		return &fault.Error{Op: "TIFF metadata", Kind: fault.Limit, Detail: "aggregate metadata budget exceeded"}
+	}
+	if r.account != nil {
+		if err := r.account.Reserve(bytes); err != nil {
+			return err
+		}
 	}
 	*r.remaining -= bytes
 	return nil
@@ -167,7 +202,7 @@ func (r *Reader) ReadDirectory(offset, base int64, withNext bool, selectTag func
 }
 
 func (r *Reader) readEntry(tag uint16, typ Type, count uint32, inline []byte, inlineOffset, base int64, selected bool) (Entry, error) {
-	entry := Entry{Tag: tag, Type: typ, Count: count, order: r.order}
+	entry := Entry{Tag: tag, Type: typ, Count: count, order: r.order, ctx: r.source.Context()}
 	size, err := typ.Size()
 	if err != nil {
 		return Entry{}, err
@@ -329,12 +364,39 @@ func (e Entry) Text() (string, error) {
 		return "", e.invalid("ASCII field lacks NUL terminator")
 	}
 	for end > 0 && e.Data[end-1] == 0 {
+		if end&4095 == 0 && e.ctx != nil {
+			if err := e.ctx.Err(); err != nil {
+				return "", err
+			}
+		}
 		end--
 	}
-	for _, value := range e.Data[:end] {
+	for i, value := range e.Data[:end] {
+		if i&4095 == 0 && e.ctx != nil {
+			if err := e.ctx.Err(); err != nil {
+				return "", err
+			}
+		}
 		if value >= 128 {
 			return "", e.invalid("non-ASCII text byte")
 		}
 	}
-	return string(e.Data[:end]), nil
+	var text strings.Builder
+	if e.ctx != nil {
+		if err := e.ctx.Err(); err != nil {
+			return "", err
+		}
+	}
+	text.Grow(end)
+	for start := 0; start < end; {
+		if e.ctx != nil {
+			if err := e.ctx.Err(); err != nil {
+				return "", err
+			}
+		}
+		next := min(start+(32<<10), end)
+		text.Write(e.Data[start:next])
+		start = next
+	}
+	return text.String(), nil
 }

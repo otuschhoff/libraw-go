@@ -144,10 +144,11 @@ func recordAt(data []byte, at int, tag uint16) []byte {
 
 func openTest(t *testing.T, data []byte, opts OpenOptions) *File {
 	t.Helper()
-	file, err := Open(bytes.NewReader(data), int64(len(data)), opts)
+	file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { file.Close() })
 	return file
 }
 
@@ -156,7 +157,7 @@ func TestORFMetadataPlansAndOwnership(t *testing.T) {
 		t.Run(map[bool]string{false: "OLYMP", true: "OLYMPUS"}[modern], func(t *testing.T) {
 			data := makeTestORF(modern)
 			f := openTest(t, data, OpenOptions{})
-			m := f.Metadata()
+			m := f.Metadata().Clone()
 			wantCFA := CFA{{Green1, Red}, {Blue, Green2}}
 			wantBlack := Levels{{65, 64}, {67, 66}}
 			wantWB := Levels{{1, 2}, {1.5, 1}}
@@ -185,7 +186,7 @@ func TestORFMetadataPlansAndOwnership(t *testing.T) {
 			m.Diagnostics[0].Message = "caller mutation"
 			caps := f.Capabilities()
 			caps.Raw.Available = false
-			if f.Metadata().Diagnostics[0].Message == "caller mutation" || !f.Capabilities().Raw.Available {
+			if f.Metadata().Clone().Diagnostics[0].Message == "caller mutation" || !f.Capabilities().Raw.Available {
 				t.Fatal("snapshot aliases internal state")
 			}
 			result, err := f.DecodeRaw(context.Background())
@@ -247,7 +248,7 @@ func TestORFMalformedGraphsAndLimits(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			data := makeTestORF(false)
 			test.edit(data)
-			file, err := Open(bytes.NewReader(data), int64(len(data)), test.opts)
+			file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), test.opts)
 			if file != nil || !errors.Is(err, test.kind) {
 				t.Fatalf("want %v; got %v, %v", test.kind, file, err)
 			}
@@ -259,7 +260,7 @@ func TestORFRecognitionAndUnsupported(t *testing.T) {
 	for _, sig := range []string{"IIRS", "MMOR", "II*\x00", "junk"} {
 		data := makeTestORF(false)
 		copy(data, sig)
-		_, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+		_, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 		want := ErrNotORF
 		if sig == "IIRS" || sig == "MMOR" {
 			want = ErrUnsupported
@@ -270,7 +271,7 @@ func TestORFRecognitionAndUnsupported(t *testing.T) {
 	}
 	for n := range 8 {
 		data := makeTestORF(false)[:n]
-		if f, err := Open(bytes.NewReader(data), int64(n), OpenOptions{}); f != nil || !errors.Is(err, ErrTruncated) {
+		if f, err := Open(context.Background(), bytes.NewReader(data), int64(n), OpenOptions{}); f != nil || !errors.Is(err, ErrTruncated) {
 			t.Fatalf("short header %d: %v", n, err)
 		}
 	}
@@ -293,18 +294,18 @@ func TestORFRecognitionAndUnsupported(t *testing.T) {
 		data := makeTestORF(false)
 		change(data)
 		file := openTest(t, data, OpenOptions{})
-		if !file.Capabilities().Metadata.Available || file.Capabilities().Raw.Available || file.Metadata().Layout.Present() {
-			t.Fatalf("unsupported mode falsely planned: %+v", file.Metadata())
+		if !file.Capabilities().Metadata.Available || file.Capabilities().Raw.Available || file.Metadata().Clone().Layout.Present() {
+			t.Fatalf("unsupported mode falsely planned: %+v", file.Metadata().Clone())
 		}
 	}
 	modern := makeTestORF(true)
 	modern[8192] = 14
-	if f := openTest(t, modern, OpenOptions{}); f.Metadata().Layout.Present() || f.Capabilities().Raw.Available {
+	if f := openTest(t, modern, OpenOptions{}); f.Metadata().Clone().Layout.Present() || f.Capabilities().Raw.Available {
 		t.Fatal("new codec treated as legacy")
 	}
 	modern = makeTestORF(true)
 	binary.LittleEndian.PutUint32(recordAt(modern, 1036, 0x2010)[8:], 1400)
-	if f, err := Open(bytes.NewReader(modern), int64(len(modern)), OpenOptions{}); err == nil && (f.Metadata().Layout.Present() || f.Metadata().CameraID.Present()) {
+	if f, err := Open(context.Background(), bytes.NewReader(modern), int64(len(modern)), OpenOptions{}); err == nil && (f.Metadata().Clone().Layout.Present() || f.Metadata().Clone().CameraID.Present()) {
 		t.Fatal("wrong modern base supplied camera identity or a decode plan")
 	}
 }
@@ -363,7 +364,7 @@ func TestPreviewSelectionBytesOwnershipAndConcurrency(t *testing.T) {
 				if err != nil || !bytes.Equal(got.JPEG, large) {
 					t.Errorf("concurrent preview: %v", err)
 				}
-				m := f.Metadata()
+				m := f.Metadata().Clone()
 				m.Diagnostics[0].Message = "private"
 			}
 		}()
@@ -400,7 +401,7 @@ func TestPreviewLimitsCancellationAndIO(t *testing.T) {
 	}
 	diskErr := errors.New("test disk failure")
 	reader := &switchReader{input: bytes.NewReader(data)}
-	file, err := Open(reader, int64(len(data)), OpenOptions{})
+	file, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,7 +416,7 @@ func TestPreviewLimitsCancellationAndIO(t *testing.T) {
 		t.Fatalf("mid-operation cancellation: %+v, %v", result, err)
 	}
 	reader.cancel, reader.err = nil, diskErr
-	if f, err := Open(reader, int64(len(data)), OpenOptions{}); f != nil || !errors.Is(err, diskErr) {
+	if f, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{}); f != nil || !errors.Is(err, diskErr) {
 		t.Fatalf("open reader error: %+v, %v", f, err)
 	}
 }
@@ -459,7 +460,7 @@ func FuzzOpenORF(f *testing.F) {
 			return
 		}
 		opts := OpenOptions{Limits: Limits{InputBytes: 1 << 20, MetadataBytes: 64 << 10, IFDs: 16, Depth: 8, EntriesPerIFD: 64, Pixels: 1024, Dimension: 64, PreviewBytes: 64 << 10, WorkingBytes: 256 << 10}}
-		file, err := Open(bytes.NewReader(data), int64(len(data)), opts)
+		file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), opts)
 		if err != nil {
 			if file != nil {
 				t.Fatal("partial file on error")

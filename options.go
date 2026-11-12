@@ -2,8 +2,9 @@
 
 package libraw
 
-// Limits are per operation, not a process-wide or concurrent-operation quota.
-// Bytes account for explicit buffers, not Go runtime RSS or GC overhead.
+// Limits are per-operation quotas. Budget separately bounds aggregate live
+// reservations across handles and concurrent calls. Bytes cover explicit
+// buffers and conservative parser allowances, not Go runtime RSS/GC overhead.
 // Zero selects the documented default; negative values are invalid.
 type Limits struct {
 	InputBytes    int64
@@ -28,9 +29,13 @@ func DefaultLimits() Limits {
 
 type OpenOptions struct {
 	Limits Limits
+	// Budget optionally shares aggregate accounting across pipelines. If nil,
+	// Open creates a budget of WorkingBytes, inherited by its RAW/preview
+	// results and by Render unless RenderOptions supplies another budget.
+	Budget *Budget
 }
 
-// Resolve validates options and replaces zero-valued limits with defaults.
+// Resolve validates limits and replaces zero-valued limits with defaults.
 // Depth cannot exceed the total IFD quota; the per-operation metadata/preview
 // budgets cannot exceed the working-buffer budget. Larger positive limits are
 // allowed, but do not disable arithmetic or platform-allocation checks.

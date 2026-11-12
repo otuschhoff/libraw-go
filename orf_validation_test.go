@@ -39,7 +39,7 @@ func TestRequiredMetadataTypesAndCounts(t *testing.T) {
 					count := binary.LittleEndian.Uint32(r[4:])
 					binary.LittleEndian.PutUint32(r[4:], count+1)
 				}
-				file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+				file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 				// Changing the MakerNote length alone can still bound a complete
 				// root; it does not change the location of pointed metadata.
 				if path.at == 512 && path.tag == 0x927c && !changeType {
@@ -122,7 +122,7 @@ func TestAdditionalMetadataAndCalibrationValidation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			altered := bytes.Clone(data)
 			test.edit(altered)
-			if file, err := Open(bytes.NewReader(altered), int64(len(altered)), OpenOptions{}); file != nil || !errors.Is(err, ErrCorrupt) {
+			if file, err := Open(context.Background(), bytes.NewReader(altered), int64(len(altered)), OpenOptions{}); file != nil || !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("wanted corrupt; got %+v, %v", file, err)
 			}
 		})
@@ -143,7 +143,7 @@ func TestAdditionalMetadataAndCalibrationValidation(t *testing.T) {
 			{tag: 0x2020, typ: tiff.Undefined, count: 24, at: 1500},
 			{tag: 0x2040, typ: tiff.Undefined, count: 84, at: 1800},
 		}, 0, false)
-		file, err := Open(bytes.NewReader(altered), int64(len(altered)), OpenOptions{})
+		file, err := Open(context.Background(), bytes.NewReader(altered), int64(len(altered)), OpenOptions{})
 		if conflict {
 			if file != nil || !errors.Is(err, ErrCorrupt) {
 				t.Fatalf("conflicting black accepted: %v", err)
@@ -176,7 +176,7 @@ func TestPayloadOrganizationsAndLogicalOrdering(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			data := makeTestORF(false)
 			test.edit(data)
-			file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+			file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 			if test.kind == nil {
 				if err != nil || file.Metadata().Layout.Present() || file.Capabilities().Raw.Available {
 					t.Fatalf("unsupported organization not safe metadata-only: %+v, %v", file, err)
@@ -209,7 +209,7 @@ func TestPayloadOrganizationsAndLogicalOrdering(t *testing.T) {
 				copy(recordAt(data, 8, entry.tag), data[6002:6014])
 			}
 			binary.LittleEndian.PutUint32(recordAt(data, 8, 0x116)[8:], 4)
-			file, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{})
+			file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{})
 			if order.kind != nil {
 				if file != nil || !errors.Is(err, order.kind) {
 					t.Fatalf("overlap accepted: %v", err)
@@ -253,7 +253,7 @@ func TestRawSelectionNotFirstAndOldFramingBoundaries(t *testing.T) {
 	binary.LittleEndian.PutUint32(equipment[4:], 12)
 	binary.LittleEndian.PutUint32(equipment[8:], uint32(len(data)-12))
 	binary.LittleEndian.PutUint16(data[len(data)-12:], 1)
-	if f, err := Open(bytes.NewReader(data), int64(len(data)), OpenOptions{}); f != nil || !errors.Is(err, ErrTruncated) {
+	if f, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), OpenOptions{}); f != nil || !errors.Is(err, ErrTruncated) {
 		t.Fatalf("old two-byte omission waived actual file bounds: %v", err)
 	}
 }
@@ -304,14 +304,14 @@ func TestPreviewInvalidHeadersTieBreaksAndQuotas(t *testing.T) {
 	} {
 		altered := bytes.Clone(data)
 		test.edit(altered)
-		if f, err := Open(bytes.NewReader(altered), int64(len(altered)), OpenOptions{}); f != nil || !errors.Is(err, test.kind) {
+		if f, err := Open(context.Background(), bytes.NewReader(altered), int64(len(altered)), OpenOptions{}); f != nil || !errors.Is(err, test.kind) {
 			t.Fatalf("preview structure accepted: %v", err)
 		}
 	}
 	// Reader failures during JPEG inspection must not become "no preview."
 	diskErr := errors.New("JPEG header read failed")
 	reader := &rangeFailure{input: bytes.NewReader(data), at: 10000, err: diskErr}
-	if f, err := Open(reader, int64(len(data)), OpenOptions{}); f != nil || !errors.Is(err, diskErr) {
+	if f, err := Open(context.Background(), reader, int64(len(data)), OpenOptions{}); f != nil || !errors.Is(err, diskErr) {
 		t.Fatalf("JPEG read error lost: %v", err)
 	}
 	// The stream's zero-length/EOF contract is independent of JPEG buffering.
@@ -342,7 +342,7 @@ func TestDimensionPlatformBounds(t *testing.T) {
 	binary.LittleEndian.PutUint32(recordAt(data, 8, 0x100)[8:], 65536)
 	binary.LittleEndian.PutUint32(recordAt(data, 8, 0x101)[8:], 65536)
 	opts := OpenOptions{Limits: Limits{Dimension: 1 << 20, Pixels: 1 << 34}}
-	file, err := Open(bytes.NewReader(data), int64(len(data)), opts)
+	file, err := Open(context.Background(), bytes.NewReader(data), int64(len(data)), opts)
 	if ^uint(0)>>32 == 0 {
 		if file != nil || !errors.Is(err, ErrLimitExceeded) {
 			t.Fatalf("32-bit geometry guard: %v", err)

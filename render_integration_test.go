@@ -56,7 +56,7 @@ func TestReferenceRendering(t *testing.T) {
 			if _, err := io.Copy(hash, input); err != nil || hex.EncodeToString(hash.Sum(nil)) != fixture.SHA256 {
 				t.Fatal("required render fixture read/hash mismatch", err)
 			}
-			file, err := Open(input, info.Size(), OpenOptions{})
+			file, err := Open(context.Background(), input, info.Size(), OpenOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -72,7 +72,7 @@ func TestReferenceRendering(t *testing.T) {
 				t.Fatal("default render capability must reflect estimated-white consent")
 			}
 			if !estimated {
-				limited, err := Open(input, info.Size(), OpenOptions{Limits: Limits{WorkingBytes: 64 << 20}})
+				limited, err := Open(context.Background(), input, info.Size(), OpenOptions{Limits: Limits{WorkingBytes: 64 << 20}})
 				if err != nil || !limited.Capabilities().Raw.Available || limited.Capabilities().Render.Available {
 					t.Fatal("render resources must be independent of RAW capability", err)
 				}
@@ -140,8 +140,8 @@ func TestReferenceRendering(t *testing.T) {
 					}
 				}
 			}
-			compareRenderedBaseline(t, out, baseline)
-			checkMemoryReaderParity(t, filepath.Join(dir, fixture.ID+".orf"), file, raw, opts, out)
+			compareRenderedBaseline(t, out.NRGBA64, baseline)
+			checkMemoryReaderParity(t, filepath.Join(dir, fixture.ID+".orf"), file, raw, opts, out.NRGBA64)
 			out.Pix[0]++
 			if !reflect.DeepEqual(before, *raw) {
 				t.Fatal("real-fixture rendering changed/aliased RAW")
@@ -286,7 +286,7 @@ func checkMemoryReaderParity(t *testing.T, path string, disk *File, raw *RawImag
 		t.Fatal(err)
 	}
 	before := sha256.Sum256(input)
-	memory, err := Open(bytes.NewReader(input), int64(len(input)), OpenOptions{})
+	memory, err := Open(context.Background(), bytes.NewReader(input), int64(len(input)), OpenOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func checkMemoryReaderParity(t *testing.T, path string, disk *File, raw *RawImag
 		t.Fatal(err)
 	}
 	memoryPreview, err := memory.Preview(context.Background())
-	if err != nil || !reflect.DeepEqual(memoryPreview, diskPreview) {
+	if err != nil || !reflect.DeepEqual(previewContents(memoryPreview), previewContents(diskPreview)) {
 		t.Fatal("preview differs by ReaderAt implementation", err)
 	}
 	memoryPreview.JPEG[0] ^= 1
@@ -306,11 +306,11 @@ func checkMemoryReaderParity(t *testing.T, path string, disk *File, raw *RawImag
 		t.Fatal("previews alias")
 	}
 	memoryRaw, err := memory.DecodeRaw(context.Background())
-	if err != nil || !reflect.DeepEqual(memoryRaw, raw) {
+	if err != nil || !reflect.DeepEqual(rawContents(memoryRaw), rawContents(raw)) {
 		t.Fatal("RAW samples, geometry or calibration differ by ReaderAt implementation", err)
 	}
 	memoryRGB, err := Render(context.Background(), memoryRaw, opts)
-	if err != nil || !reflect.DeepEqual(memoryRGB, rgb) {
+	if err != nil || !reflect.DeepEqual(memoryRGB.NRGBA64, rgb) {
 		t.Fatal("rendering differs by ReaderAt implementation", err)
 	}
 	memoryRaw.Pixels[0] ^= 1

@@ -164,6 +164,11 @@ func decodeLegacyRows(ctx context.Context, b *legacyBits, pixels []uint16, width
 		}
 		var states [2]legacyState
 		for x := range codedWidth {
+			if x&255 == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
 			sampleStart := b.consumed
 			diff, low, err := states[x&1].residual(b)
 			if err != nil {
@@ -195,8 +200,22 @@ func (f *File) decodeLegacy(ctx context.Context) (*RawImage, error) {
 	if err != nil {
 		return nil, err
 	}
+	account, err := f.reserveRaw()
+	if err != nil {
+		return nil, err
+	}
+	success := false
+	defer func() {
+		if !success {
+			account.Close()
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return nil, &Error{Op: "decode raw", Cause: err}
+	}
 	pixels := make([]uint16, count)
 	bits := f.legacyReader(make([]byte, scratchBytes))
+	bits.source = f.source.WithContext(ctx)
 	if err := decodeLegacyRows(ctx, &bits, pixels, f.plan.width, f.plan.width, f.plan.height); err != nil {
 		failure := &Error{Op: "decode raw", Cause: err, Layout: f.plan.layout}
 		var location *Error
@@ -205,5 +224,11 @@ func (f *File) decodeLegacy(ctx context.Context) (*RawImage, error) {
 		}
 		return nil, failure
 	}
-	return f.rawImage(pixels, diagnostics), nil
+	raw := f.rawImage(pixels, diagnostics)
+	account.Release(f.plan.scratchBytes)
+	raw.budget, raw.account = f.budget, account
+	raw.owner = f.owner
+	raw.owner.retain()
+	success = true
+	return raw, nil
 }

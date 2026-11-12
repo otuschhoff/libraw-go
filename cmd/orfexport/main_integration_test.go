@@ -38,7 +38,7 @@ func TestReferenceExports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := libraw.Open(input, info.Size(), libraw.OpenOptions{})
+	file, err := libraw.Open(context.Background(), input, info.Size(), libraw.OpenOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
