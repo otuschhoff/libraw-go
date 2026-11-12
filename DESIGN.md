@@ -1,5 +1,15 @@
 # Pure-Go Olympus ORF Decoder: Design and Execution Specification
 
+**Current owner-directed scope overrides the broad roadmap below:** implement
+only the local Olympus OM-D E-M5/S0036 12-bit legacy ORF type. Other camera
+models and newer codecs are irrelevant for now. Existing historical behavior
+and licensed regressions are preserved, but additional fixture acquisition for
+those cameras is not current work. See the [E-M5 contract](docs/em5.md) for
+the exact identity/mode/geometry/calibration scope and private-corpus checks.
+The earlier phase/milestone records remain historical evidence, not a mandate
+to expand camera support. Private originals/derived images require explicit
+permission before public distribution.
+
 Status: implementation specification; Phase 0 evidence and reference tooling
 are recorded in [the Phase 0 report](docs/phase0.md). Phase 1's module,
 contracts, and bounded primitives are described in [README](README.md).

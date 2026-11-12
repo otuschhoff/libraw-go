@@ -77,6 +77,8 @@ jobs:
           - package: .
             target: FuzzMakerNotes
           - package: .
+            target: FuzzEM5Metadata
+          - package: .
             target: FuzzDecodeWord
           - package: .
             target: FuzzDecodeLegacy

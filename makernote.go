@@ -223,9 +223,16 @@ func (p *parser) cameraSettings(d directory, base int64) error {
 
 func (p *parser) imageProcessing(d directory) error {
 	if e, ok := d.entries[0x0100]; ok {
-		values, err := numbers(e, tiff.Short, 2)
+		count := uint32(2)
+		if p.metadata.NormalizedMake == "Olympus" && p.metadata.NormalizedModel == "E-M5" && p.cameraID == "S0036" && e.Count == 4 {
+			count = 4
+		}
+		values, err := numbers(e, tiff.Short, count)
 		if err != nil {
 			return err
+		}
+		if count == 4 && (values[2] != 256 || values[3] != 256) {
+			return badEntry(e, "unevidenced E-M5 green-reference WB components")
 		}
 		p.wb, p.hasWB = [2]uint64{values[0], values[1]}, true
 	}

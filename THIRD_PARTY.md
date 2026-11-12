@@ -79,6 +79,18 @@ marked as an estimate requiring caller permission. No per-file black/WB
 observations are promoted into generic camera tables, and no camera
 certification, native runtime dependency or illuminant interpolation is implied.
 
+### E-M5-only scope extension
+
+The owner subsequently requested full implementation of the personal E-M5
+ORF type. The narrowly scoped S0036 profile uses the E-M5 (not Mark II/III)
+entry in the same pinned LibRaw `colordata.cpp`, including maximum `0xfe1`
+and its nine color coefficients, under the same LGPL-2.1-only election and
+upstream attribution. The [E-M5 report](docs/em5.md) records the source hashes,
+WB interpretation and native validation workflow. No personal black/WB
+observations or image samples are promoted into generic calibration tables.
+Private photographs and their derived images are not included in this change;
+the existing CC0 manifest is not extended by assumption.
+
 ## ExifTool
 
 - Upstream: <https://github.com/exiftool/exiftool>.

@@ -173,7 +173,8 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 	if model == "E-1" {
 		expectedMode = "SpecialMode=0 0 0;DriveMode=0 0"
 	}
-	if p.mode != expectedMode && !(model == "E-410" && p.mode == "SpecialMode=2 1 0;DriveMode=1 1 0") {
+	em5 := model == "E-M5" && identity == "S0036" && plan.width == 4640 && plan.height == 3472 && em5CaptureMode(p.mode)
+	if p.mode != expectedMode && !(model == "E-410" && p.mode == "SpecialMode=2 1 0;DriveMode=1 1 0") && !em5 {
 		return plan, "unsupported capture mode; only fixture-evidenced single stored Bayer frames are planned", nil
 	}
 	if p.makerForm == "OLYMP" && ((model == "E-1" && identity == "D4040") || (model == "E-400" && identity == "S0009")) && word {
@@ -185,7 +186,7 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 		plan.scratchBytes = uint64(plan.width) * 2
 		return plan, "identified olympus-word16le-high12", nil
 	}
-	if p.makerForm == "OLYMPUS" && ((model == "E-410" && identity == "S0013") || (model == "E-510" && identity == "S0010")) &&
+	if p.makerForm == "OLYMPUS" && ((model == "E-410" && identity == "S0013") || (model == "E-510" && identity == "S0010") || em5) &&
 		len(plan.strips) == 1 && !word {
 		if plan.width%2 != 0 {
 			return plan, "unsupported odd coded width for evidenced legacy predictive layout", nil
@@ -209,6 +210,29 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 		return plan, "identified olympus-legacy-predictive12", nil
 	}
 	return plan, "unsupported model/identity, MakerNote variant, or strip layout; no camera-name-only decoder guess", nil
+}
+
+func em5CaptureMode(mode string) bool {
+	switch mode {
+	case "SpecialMode=2 1 0;DriveMode=5 3 1", "SpecialMode=2 1 0;DriveMode=5 4 1",
+		"SpecialMode=2 1 0;DriveMode=5 5 1", "SpecialMode=2 2 0;DriveMode=5 4 1",
+		"SpecialMode=2 2 0;DriveMode=5 5 1", "SpecialMode=2 3 0;DriveMode=5 5 1":
+		return true
+	}
+	if mode == "SpecialMode=0 0 0;DriveMode=0 0 0" {
+		return true
+	}
+	for i := 1; i <= 14; i++ {
+		if mode == fmt.Sprintf("SpecialMode=2 %d 0;DriveMode=1 %d 0", i, i) {
+			return true
+		}
+	}
+	for i := 1; i <= 5; i++ {
+		if mode == fmt.Sprintf("SpecialMode=2 %d 0;DriveMode=5 %d 1", i, i) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *parser) payloadExtents(offsets, counts tiff.Entry) error {

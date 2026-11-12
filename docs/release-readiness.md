@@ -1,5 +1,10 @@
 # Phase 7: usable engineering milestone, release blocked
 
+**Historical four-camera milestone:** current work is now restricted by the
+owner to [E-M5/S0036](em5.md). The fixture gaps and certification command in
+this report describe the earlier public regression corpus, not a requirement
+to develop or acquire other camera types for the active target.
+
 Phase 7's engineering work is implemented: runnable metadata/preview/RAW/PNG
 examples, full-resolution rendered regression artifacts, filesystem/in-memory
 API parity, repeatable measurements, and documented limitations and licensing.

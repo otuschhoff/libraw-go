@@ -439,6 +439,14 @@ func (r *switchReader) ReadAt(data []byte, offset int64) (int, error) {
 func FuzzOpenORF(f *testing.F) {
 	f.Add(makeTestORF(false))
 	f.Add(makeTestORF(true))
+	em5 := em5TestORF("E-M5", "S0036")
+	wb := recordAt(em5, 1800, 0x0100)
+	binary.LittleEndian.PutUint32(wb[4:], 4)
+	binary.LittleEndian.PutUint32(wb[8:], 7400-1024)
+	for i, value := range []uint16{384, 512, 256, 256} {
+		binary.LittleEndian.PutUint16(em5[7400+i*2:], value)
+	}
+	f.Add(em5)
 	wordSeed, _ := wordORF(16, 8, 3)
 	f.Add(wordSeed)
 	predictiveSeed, _ := encodeLegacy(legacyPlane(16, 8), 16, 8)

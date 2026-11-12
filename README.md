@@ -2,9 +2,18 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 7 engineering implemented; camera certification and the
-M1+M2 release remain blocked pending second independently captured licensed
-fixtures. Exact sensor-code decoding is available for the evidenced
+**Active scope: Olympus OM-D E-M5 / S0036 only**, matching the local personal
+ORFs: 12-bit legacy predictive RAW, 4640x3472 sensor, 4608x3456 active crop.
+Metadata, original previews, exact RAW decoding and default calibrated
+rendering are implemented for the observed normal/sequence/bracket tuples.
+See the [E-M5 contract and private validation workflow](docs/em5.md).
+Other models/newer codecs are not current development targets. Older public
+fixtures and the reports below are retained as historical compatibility evidence,
+not an instruction to acquire more unrelated camera samples.
+
+**Historical Phase 7 status: engineering implemented; the original four-camera
+certification/release gate remains unmet and is not the active development
+goal. Exact sensor-code decoding is available for the evidenced
 `olympus-word16le-high12` and `olympus-legacy-predictive12` layouts, alongside ORF
 metadata, embedded JPEGs, `orfinfo` and `orfexport`. Basic independent sRGB rendering is
 implemented for explicitly calibrated Bayer images. This is a

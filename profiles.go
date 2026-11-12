@@ -27,6 +27,10 @@ func (p *parser) applyProfile(plan decodePlan) error {
 			p.mode == "SpecialMode=0 0 0;DriveMode=0 0 0":
 			width, height, white = 3720, 2800, 3946
 			coefficients = [9]int{8785, -2529, -1033, -7639, 15624, 2112, -1783, 2300, 7817}
+		case m.NormalizedModel == "E-M5" && p.cameraID == "S0036" && plan.layout == "olympus-legacy-predictive12" &&
+			em5CaptureMode(p.mode):
+			width, height, white = 4640, 3472, 4065
+			coefficients = [9]int{8380, -2630, -639, -2887, 10725, 2496, -627, 1427, 5438}
 		}
 	}
 	if width != 0 && plan.width == width && plan.height == height {

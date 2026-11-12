@@ -113,6 +113,9 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 	}
 	if plan.layout != "" {
 		p.metadata.Layout = Value[string]{Value: plan.layout, Origin: OriginProfile, Source: "phase0/evidenced-layout-selector"}
+		if p.metadata.NormalizedModel == "E-M5" && p.cameraID == "S0036" {
+			p.metadata.Layout.Source = "E-M5/S0036/private-corpus-layout-selector"
+		}
 	}
 	if err := p.applyProfile(plan); err != nil {
 		return nil, err
