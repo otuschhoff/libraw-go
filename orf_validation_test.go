@@ -223,6 +223,14 @@ func TestPayloadOrganizationsAndLogicalOrdering(t *testing.T) {
 				file.plan.strips[1].row != 4 || file.plan.strips[1].rows != 4 {
 				t.Fatalf("logical order or eligibility changed: %+v", file.plan)
 			}
+			if file.Capabilities().Raw.Available != order.planned {
+				t.Fatal("unsupported strip order advertised as decodable")
+			}
+			if !order.planned {
+				if raw, err := file.DecodeRaw(context.Background()); raw != nil || !errors.Is(err, ErrUnsupported) {
+					t.Fatalf("unsupported strip organization decoded: %v", err)
+				}
+			}
 		})
 	}
 }

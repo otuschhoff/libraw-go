@@ -182,8 +182,11 @@ EXIF Bayer pattern, and exact two-byte-per-sample payload length.
 Only E-1 and E-400 fixture combinations have been measured.
 
 These predicates identify this initial family; payload size alone must not
-classify an unknown camera or mode. An actual production selector is still
-to be implemented and tested in Phase 3.
+classify an unknown camera or mode. Phase 3 implements the
+[selector](../plan.go) and [word decoder](../word.go) with exact sample tests.
+Present TIFF FillOrder, PlanarConfiguration, Predictor, SampleFormat and
+ImageDepth controls must be correctly typed scalar values of one; other
+encodings remain unsupported rather than being ignored during word decoding.
 
 ### Measured storage conversion
 
@@ -356,7 +359,8 @@ unknown. No high-resolution/pixel-shift or ORI input is included.
 
 There are two distinct real files per measured layout but only one per
 camera/mode. Phase 0 therefore establishes initial layout evidence, not the
-design's production camera-certification gate. No production decoder exists.
+design's production camera-certification gate. Phase 3 implements only the
+evidenced word layout; predictive decoding remains deferred to Phase 4.
 
 ## 7. Embedded JPEG evidence (Phase 2)
 

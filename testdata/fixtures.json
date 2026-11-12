@@ -18,7 +18,7 @@
       "special_mode": "0 0 0",
       "mode": "single-frame ORF; archive labels 16bit (4:3), not a claim of 16 valid bits",
       "capabilities": {
-        "production_decode": false,
+        "production_decode": true,
         "reference_decode": true
       }
     },
@@ -36,7 +36,7 @@
       "special_mode": "0 0 0",
       "mode": "single-frame ORF; archive labels 16bit (4:3), not a claim of 16 valid bits",
       "capabilities": {
-        "production_decode": false,
+        "production_decode": true,
         "reference_decode": true
       }
     },

@@ -137,7 +137,9 @@ type Capabilities struct {
 // RawImage owns unprocessed sensor-code samples; no crop, orientation, black
 // subtraction, WB, or scaling has been applied. Initially Stride equals Width
 // and len(Pixels) equals Stride*Height. ActiveArea is half-open and CFA is
-// anchored to the uncropped plane. Callers may mutate their own results.
+// anchored to the uncropped plane. An empty ActiveArea means the file supplied
+// no verified crop; the full sensor plane is still retained, not guessed to be
+// an active crop. Callers may mutate their own results.
 type RawImage struct {
 	Pixels      []uint16
 	Width       int

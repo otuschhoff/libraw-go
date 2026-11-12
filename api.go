@@ -43,13 +43,21 @@ func (f *File) Metadata() Metadata { return f.metadata.Clone() }
 // Capabilities distinguishes working operations from identified future layouts.
 func (f *File) Capabilities() Capabilities { return f.caps }
 
-// DecodeRaw never substitutes an embedded JPEG. Pixel decoders are implemented
-// in Phases 3-4; Phase 2 deliberately reports unsupported for every raw layout.
+// DecodeRaw returns caller-owned, unprocessed sensor codes for an evidenced
+// word layout. It retains all sensor pixels without cropping, orientation,
+// black subtraction or scaling. Other layouts return ErrUnsupported; an
+// embedded JPEG is never substituted. Cancellation cannot interrupt a blocked
+// caller-supplied ReaderAt, but is checked between rows and before success.
 func (f *File) DecodeRaw(ctx context.Context) (*RawImage, error) {
 	if err := f.operation(ctx); err != nil {
 		return nil, err
 	}
-	return nil, &Error{Op: "decode raw", Kind: ErrUnsupported, Layout: f.plan.layout, Detail: f.caps.Raw.Reason}
+	switch f.plan.layout {
+	case "olympus-word16le-high12":
+		return f.decodeWord(ctx)
+	default:
+		return nil, &Error{Op: "decode raw", Kind: ErrUnsupported, Layout: f.plan.layout, Detail: f.caps.Raw.Reason}
+	}
 }
 
 func (f *File) operation(ctx context.Context) error {

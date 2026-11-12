@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/binary"
+	"fmt"
 	"slices"
 
 	"github.com/otuschhoff/libraw-go/internal/bounded"
@@ -49,8 +50,8 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 	if _, err := bounded.Int(output); err != nil {
 		return plan, "", err
 	}
-	// No pixel allocation is performed here. DecodeRaw will enforce output and
-	// scratch quotas again once a decoder exists.
+	// No pixel allocation is performed here. DecodeRaw enforces the operation's
+	// output, scratch and diagnostic storage quota before allocating.
 	offsets, hasOffsets := d.entries[0x111]
 	counts, hasCounts := d.entries[0x117]
 	rowsEntry, hasRows := d.entries[0x116]
@@ -147,6 +148,22 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 	if bits != 16 || compression != 1 || photo != 1 || p.validBits != 12 || !m.CFA.Present() {
 		return plan, "unsupported raw encoding: evidenced 16-bit container, compression=1, 12 valid bits and Bayer CFA required", nil
 	}
+	for _, control := range []struct {
+		tag  uint16
+		typ  tiff.Type
+		name string
+	}{{0x10a, tiff.Short, "FillOrder"}, {0x11c, tiff.Short, "PlanarConfiguration"},
+		{0x13d, tiff.Short, "Predictor"}, {0x153, tiff.Short, "SampleFormat"}, {0x80e5, tiff.Long, "ImageDepth"}} {
+		if entry, ok := d.entries[control.tag]; ok {
+			value, err := scalar(entry, control.typ)
+			if err != nil {
+				return plan, "", err
+			}
+			if value != 1 {
+				return plan, fmt.Sprintf("unsupported raw encoding: %s=%d (only default 1 is evidenced)", control.name, value), nil
+			}
+		}
+	}
 	plan.storageBits, plan.byteOrder = 16, binary.LittleEndian
 	model, identity := m.NormalizedModel, p.cameraID
 	if m.NormalizedMake != "Olympus" {
@@ -166,7 +183,7 @@ func (p *parser) makePlan(d directory) (decodePlan, string, error) {
 		plan.layout, plan.rightShift = "olympus-word16le-high12", 4
 		plan.rowBytes = uint64(plan.width) * 2
 		plan.scratchBytes = uint64(plan.width) * 2
-		return plan, "identified olympus-word16le-high12; pixel decoder deferred to Phase 3", nil
+		return plan, "identified olympus-word16le-high12", nil
 	}
 	if p.makerForm == "OLYMPUS" && ((model == "E-410" && identity == "S0013") || (model == "E-510" && identity == "S0010")) &&
 		len(plan.strips) == 1 && !word {

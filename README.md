@@ -2,10 +2,10 @@
 
 A pure-Go Olympus/OM System ORF subset of LibRaw under development.
 
-**Current status: Phase 2 complete: bounded ORF opening, metadata, honest
-capability reports, original embedded JPEG extraction, and `orfinfo`.
-Raw pixel decoding and rendering are not implemented. Identifying a storage
-layout is not a supported-camera or raw-decoding claim.**
+**Current status: Phase 3 complete: exact sensor-code decoding for the evidenced
+`olympus-word16le-high12` layout, alongside ORF metadata, embedded JPEGs and
+`orfinfo`. Legacy predictive decoding awaits Phase 4; rendering is not
+implemented. Layout coverage is not camera/mode certification or an M1 release.**
 
 ## Project decisions
 
@@ -22,6 +22,132 @@ The production module is initialized at the approved path and Go version.
 It depends only on the standard library and builds with `CGO_ENABLED=0`.
 Native tools below remain development-only, with no native or
 external-process production dependency.
+
+## Phase 3: evidenced word-based RAW decoding
+
+`DecodeRaw` now implements the single initial evidenced word layout. No packed,
+big-endian, interleaved, or additional camera layout is invented to satisfy a
+generic "12-bit" label. For a `File` opened as in the next section:
+
+```go
+raw, err := file.DecodeRaw(context.Background())
+if err != nil {
+    return err
+}
+_ = raw.Pixels // caller-owned, full unrotated sensor plane, not RGB
+```
+
+The decoder reads one row buffer through the validated logical strips. Each
+little-endian uint16 storage word is shifted right by four, yielding a 12-bit
+sensor code. Nonzero discarded low nibbles are valid, not corrupt samples.
+There is no crop, row shuffle, orientation transform, black subtraction, WB,
+clipping, scaling, demosaic, or JPEG fallback.
+
+The initial evidence gate compares **every sample**, including sensor margins:
+
+| Required fixture | Sensor dimensions | Strips | Final strip rows | Exact samples |
+|---|---:|---:|---:|---:|
+| olympus-e-1-1800 | 2624 x 1966 | 16 | 16 | 5,158,784 |
+| olympus-e-400-2151 | 3768 x 2840 | 89 | 24 | 10,701,120 |
+
+All **15,859,904** samples match the pinned LibRaw 0.21.4 goldens, with zero
+mismatches. Compressed-artifact SHA-256, full sensor u16le SHA-256, gzip trailer,
+sample counts, export region, geometry and calibration propagation are checked.
+The E-400 input's 793 nonzero low nibbles are retained in the source and correctly
+discarded only by the documented storage-to-sensor conversion. Original inputs
+and golden/reference artifacts are unchanged.
+
+`RawImage.Stride == Width` and `len(Pixels) == Width*Height`. CFA and calibration
+remain anchored to uncropped raw coordinate `(0,0)`; EXIF orientation is preserved
+without rotating pixels. A verified active crop is returned as a half-open
+rectangle without applying it. If no verified crop is available, `ActiveArea`
+is empty with an `active-area-unavailable` diagnostic; the full sensor plane is
+still decoded. Missing black/WB/white/color calibration retains its explicit
+presence/provenance and does not prevent raw extraction.
+
+### Capabilities, limits and failure behavior
+
+`Capabilities.Raw.Available` is true only for the evidenced word selector when
+its decode buffers fit the resolved limits. It does not merely test the camera
+name or nominal bit depth. `orfinfo` reports this automatically without decoding
+the image. Predictive/newer codecs and unsupported organizations return
+`ErrUnsupported`; an identified word layout exceeding its working quota instead
+returns `ErrLimitExceeded`, with an explanatory unavailable capability reason.
+Rendering remains unavailable for every file.
+
+Word plans require matching make/model/identity, MakerNote form, capture mode,
+CFA, valid/storage depths, and exact contiguous row-sized strip organization.
+Physically reordered/gapped strips, row padding, signed/floating sample formats,
+nondefault predictors/fill orders/planar configuration/image depth, and other
+packing are not silently interpreted as plain words. Malformed field types or
+references fail explicitly.
+
+Before allocation, the operation checks platform-sized byte/element counts and
+the sum of one output plane, one input row, and diagnostic storage:
+`2*width*height + 2*width + 64*diagnosticCount` accounted bytes. The diagnostic
+allowance includes the unknown-crop diagnostic if needed. No second plane or
+whole-file buffer is allocated. Retained `File` metadata and Go runtime
+allocation rounding/GC/RSS are not per-call buffer-size guarantees.
+
+Calls use independent output/scratch/diagnostic buffers and never close the
+input. Concurrent calls require a concurrent `ReaderAt`, and their quotas are
+per call, not a global concurrent-memory cap. Cancellation is checked between
+rows and before success; the API cannot interrupt a blocked caller-supplied
+`ReadAt`. Short reads, real errors (even combined with EOF on a full read), and
+cancellation preserve their causes and never return a partially filled image.
+
+### Phase 3 validation and repeated completion review
+
+```sh
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go vet ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go build ./...
+GOTOOLCHAIN=go1.26.0 go test -race -tags=integration ./...
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz=FuzzDecodeWord -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -run='^$' -fuzz=FuzzOpenORF -fuzztime=60s -fuzzminimizetime=1s -parallel=4 .
+GOTOOLCHAIN=go1.26.0 CGO_ENABLED=0 go test -tags=integration -run='^$' -bench=BenchmarkReferenceWordDecode -benchmem -count=3 .
+```
+
+The integration workflow uses the licensed originals fetched by the
+[reference workflow](tools/reference/README.md), optionally under
+`ORF_FIXTURE_DIR`. Missing/changed fixtures and goldens fail rather than skip.
+Ordinary tests and synthetic fuzzing remain offline and photograph-independent.
+
+Re-evaluation resolved newly relevant TIFF encoding controls, exact working-quota
+capability boundaries, unknown crop semantics, and per-row error-position heap
+allocations in the bounded reader. Error classifications and offsets are
+preserved while successful reads no longer allocate a position per row.
+Regression tests cover zero/max/alternating sensor codes, arbitrary low nibbles,
+odd dimensions, final partial strips, truncated words/arrays, unsupported
+organizations, literal/joined EOF, deadlines and cancellation on the final row,
+independent metadata/calibration/pixel ownership, and concurrent calls.
+
+Final validation on macOS/arm64:
+
+- Go 1.26.0 offline/integration tests, vet and CGO-disabled builds pass;
+  Go 1.27.3 integration tests and Go 1.26.0 race-enabled integration tests pass.
+- Aggregate instrumented coverage: **91.1%**; word decode loop coverage: **100%**.
+- Final full-parser/decode fuzz gate: **6,267,367 executions in 60 seconds**;
+  arbitrary-word/geometry fuzz gate: **5,334,777 in 60 seconds**. No failures.
+- Linux/386 integration tests cross-compile (`go test -exec=true`, not runtime
+  execution); Linux/amd64, Linux/arm64 and macOS/amd64 production packages build.
+- Production dependencies remain standard-library-only without CgoFiles or
+  CXXFiles. Standalone reference tests and all four original fixture/artifact/
+  layout/raw-hash integrity checks pass.
+
+Go 1.26.0, `CGO_ENABLED=0`, Apple M1 Max, macOS/arm64; three 300ms benchmark
+repeats with the fixed input hashes in the manifest measured:
+
+| Fixture | Time/decode | Throughput | Go-reported B/op | Allocations/op |
+|---|---:|---:|---:|---:|
+| E-1, 2624 x 1966 | 7.6-8.9 ms | 581-677 MP/s | 10,328,078-10,328,205 | 4 |
+| E-400, 3768 x 2840 | 15.1-15.5 ms | 690-709 MP/s | 21,414,666-21,414,671 | 4 |
+
+These are local baseline observations, not machine-independent performance
+promises. Allocation count is independent of row/strip count; a regression test
+guards this property. The Phase 3 gate is complete with no outstanding findings;
+Phase 4 predictive decoding and Phase 5 release/hardening gates remain separate.
 
 ## Phase 2: ORF metadata and embedded previews
 
@@ -81,13 +207,14 @@ Safely parsed unsupported models, modes, tiled organizations, reordered/gapped
 strips, or newer codecs can still expose metadata/previews. No camera-name-only,
 file-size-only, or nominal-bit-depth-only decoder guess is made. Logical strip
 order is preserved even when that organization cannot select an initial plan.
-`Capabilities.Raw.Available` and `.Render.Available` are always false in this
-phase; `DecodeRaw` returns `ErrUnsupported` and never substitutes a JPEG.
+Phase 2 introduced metadata-only plans. Phase 3 now enables RAW only for the
+word layout above; predictive/newer codecs still return `ErrUnsupported`.
+`.Render.Available` remains false, and RAW never substitutes a JPEG.
 
 White level, firmware, and camera-to-XYZ transforms remain explicitly unavailable
 unless established by verified metadata; native reference camera-table values
 are not relabeled as file calibration. Missing white/color calibration does not
-prevent metadata or preview extraction.
+prevent metadata, preview or supported raw extraction.
 
 ### Preview selection and errors
 
@@ -170,9 +297,10 @@ Final validation on macOS/arm64:
   CgoFiles/CXXFiles. Standalone reference tests and all four offline
   fixture/artifact/layout/hash integrity checks pass unchanged.
 
-The Phase 2 gate is satisfied only for parsing/planning and preview extraction.
+The Phase 2 gate covers only parsing/planning and preview extraction.
 Two fixtures per initial layout are evidence, not camera/mode certification:
-there is still only one file per camera, and M1 sample parity awaits Phases 3-4.
+there is still only one file per camera. Phase 3 adds word sample parity;
+predictive sample parity and M1 release gates remain for Phases 4-5.
 
 ## Phase 1 contracts
 
@@ -214,9 +342,9 @@ checks. A lowered working-buffer budget must still cover the resolved
 metadata and preview limits, and resolved depth must not exceed the IFD quota.
 
 `Open`/`File` now implement the borrowed-input and ownership contracts described
-above. `RawImage` remains the contract for Phases 3-4; `DecodeRaw` explicitly
-reports unavailable pixel decoders rather than fabricating pixels or preview
-fallbacks. No `Render` implementation is exposed before Phase 6.
+above. `RawImage` is now produced for the evidenced word layout; `DecodeRaw`
+explicitly reports unsupported remaining layouts rather than fabricating pixels
+or preview fallbacks. No `Render` implementation is exposed before Phase 6.
 
 ### Internal primitives
 
@@ -343,7 +471,8 @@ committed index. It never rewrites expected results.
 
 Initial evidence covers E-1/E-400 little-endian word storage and E-410/E-510
 legacy predictive storage. There is only one photograph per camera, so this
-is evidence for future layout implementation, **not camera certification**.
+is layout implementation evidence, **not camera certification**. The word
+layout now decodes; legacy predictive storage remains planned for Phase 4.
 The design's two-fixtures-per-advertised-camera/mode release gate still
 applies. Newer 12/14-bit codecs, other ORF signatures, packed formats,
 high-resolution modes, ORI, and multi-frame reconstruction remain deferred.

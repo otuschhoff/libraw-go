@@ -84,10 +84,12 @@ func (r *Reader) Offset(base int64, relative uint64) (int64, error) {
 // Extent permits an empty range at EOF, but never a range beyond declared size.
 func (r *Reader) Extent(offset int64, length uint64) error {
 	if offset < 0 {
-		return &fault.Error{Op: "extent", Kind: fault.Corrupt, Offset: &offset, Detail: "negative offset"}
+		position := offset
+		return &fault.Error{Op: "extent", Kind: fault.Corrupt, Offset: &position, Detail: "negative offset"}
 	}
 	if offset > r.size || length > uint64(r.size-offset) {
-		return &fault.Error{Op: "extent", Kind: fault.Truncated, Offset: &offset, Detail: "range exceeds declared input"}
+		position := offset
+		return &fault.Error{Op: "extent", Kind: fault.Truncated, Offset: &position, Detail: "range exceeds declared input"}
 	}
 	return nil
 }
@@ -101,7 +103,8 @@ func (r *Reader) ReadAt(data []byte, offset int64) error {
 	}
 	n, err := r.input.ReadAt(data, offset)
 	if n < 0 || n > len(data) {
-		return &fault.Error{Op: "read", Kind: fault.Corrupt, Cause: err, Offset: &offset, Detail: "ReaderAt returned invalid byte count"}
+		position := offset
+		return &fault.Error{Op: "read", Kind: fault.Corrupt, Cause: err, Offset: &position, Detail: "ReaderAt returned invalid byte count"}
 	}
 	// A full read with EOF is permitted by ReaderAt. Other failures remain real
 	// failures even if the implementation returned all requested bytes.
@@ -112,9 +115,11 @@ func (r *Reader) ReadAt(data []byte, offset int64) error {
 		if err == nil {
 			err = io.ErrUnexpectedEOF
 		}
-		return &fault.Error{Op: "read", Kind: fault.Truncated, Cause: err, Offset: &offset, Detail: "short ReaderAt read"}
+		position := offset
+		return &fault.Error{Op: "read", Kind: fault.Truncated, Cause: err, Offset: &position, Detail: "short ReaderAt read"}
 	}
-	return &fault.Error{Op: "read", Cause: err, Offset: &offset}
+	position := offset
+	return &fault.Error{Op: "read", Cause: err, Offset: &position}
 }
 
 // Bytes validates the extent, platform int, and caller budget before allocation.

@@ -128,6 +128,13 @@ func openORF(source *bounded.Reader, limits Limits) (*File, error) {
 	if preview != nil {
 		f.caps.Preview.Reason = ""
 	}
+	if plan.layout == "olympus-word16le-high12" {
+		if _, _, _, err := f.rawResources(); err != nil {
+			f.caps.Raw.Reason = err.Error()
+		} else {
+			f.caps.Raw = Capability{Available: true}
+		}
+	}
 	return f, nil
 }
 
@@ -181,7 +188,8 @@ func (p *parser) directory(offset, base, depth int64, classic bool, reader *tiff
 func imageTag(tag uint16) bool {
 	switch tag {
 	case 0xfe, 0x100, 0x101, 0x102, 0x103, 0x106, 0x10f, 0x110, 0x111, 0x112,
-		0x115, 0x116, 0x117, 0x131, 0x14a, 0x201, 0x202, 0x8769, 0x142, 0x143, 0x144, 0x145:
+		0x115, 0x116, 0x117, 0x131, 0x14a, 0x201, 0x202, 0x8769, 0x142, 0x143, 0x144, 0x145,
+		0x10a, 0x11c, 0x13d, 0x153, 0x80e5:
 		return true
 	}
 	return false

@@ -180,17 +180,22 @@ func TestORFMetadataPlansAndOwnership(t *testing.T) {
 			if f.plan.outputBytes != 256 || f.plan.width != 16 || len(f.plan.strips) != 1 || f.plan.strips[0].row != 0 || f.plan.strips[0].rows != 8 {
 				t.Fatalf("incorrect plan: %+v", f.plan)
 			}
-			if !f.Capabilities().Metadata.Available || f.Capabilities().Raw.Available || f.Capabilities().Render.Available {
+			if !f.Capabilities().Metadata.Available || f.Capabilities().Raw.Available == modern || f.Capabilities().Render.Available {
 				t.Fatal("unsupported operations advertised")
 			}
 			m.Diagnostics[0].Message = "caller mutation"
 			caps := f.Capabilities()
-			caps.Raw.Available = true
-			if f.Metadata().Diagnostics[0].Message == "caller mutation" || f.Capabilities().Raw.Available {
+			caps.Raw.Available = modern
+			if f.Metadata().Diagnostics[0].Message == "caller mutation" || f.Capabilities().Raw.Available == modern {
 				t.Fatal("snapshot aliases internal state")
 			}
-			if result, err := f.DecodeRaw(context.Background()); result != nil || !errors.Is(err, ErrUnsupported) {
-				t.Fatalf("raw placeholder: %+v, %v", result, err)
+			result, err := f.DecodeRaw(context.Background())
+			if modern {
+				if result != nil || !errors.Is(err, ErrUnsupported) {
+					t.Fatalf("compressed layout must remain unsupported: %+v, %v", result, err)
+				}
+			} else if err != nil || len(result.Pixels) != 128 {
+				t.Fatalf("word decode: %+v, %v", result, err)
 			}
 			if result, err := f.Preview(context.Background()); result != nil || !errors.Is(err, ErrNoPreview) {
 				t.Fatalf("missing preview: %+v, %v", result, err)
@@ -451,12 +456,21 @@ func FuzzOpenORF(f *testing.F) {
 			return
 		}
 		m := file.Metadata()
-		if !reflect.DeepEqual(m, file.Metadata()) || file.Capabilities().Raw.Available || file.Capabilities().Render.Available {
+		if !reflect.DeepEqual(m, file.Metadata()) || file.Capabilities().Render.Available ||
+			(file.Capabilities().Raw.Available && m.Layout.Value != "olympus-word16le-high12") {
 			t.Fatal("unstable metadata or false capabilities")
 		}
 		preview, err := file.Preview(context.Background())
 		if err != nil && preview != nil {
 			t.Fatal("partial preview on error")
+		}
+		raw, err := file.DecodeRaw(context.Background())
+		if err != nil {
+			if raw != nil || file.Capabilities().Raw.Available {
+				t.Fatalf("raw capability/result disagree: %v", err)
+			}
+		} else if !file.Capabilities().Raw.Available || raw.Stride != raw.Width || len(raw.Pixels) != raw.Width*raw.Height {
+			t.Fatal("invalid decoded raw shape or capability")
 		}
 	})
 }

@@ -171,14 +171,14 @@ func TestReferenceFixtureMetadataAndPreviews(t *testing.T) {
 				t.Fatalf("Open/Preview over-read raw payload or materialized excess data: %v, %d bytes", spy.err, spy.bytes)
 			}
 			caps := file.Capabilities()
-			if !caps.Metadata.Available || !caps.Preview.Available || caps.Raw.Available || caps.Render.Available {
+			if !caps.Metadata.Available || !caps.Preview.Available || caps.Raw.Available != word || caps.Render.Available {
 				t.Fatalf("incorrect capability report: %+v", caps)
 			}
 		})
 	}
 }
 
-func readJSON(t *testing.T, path string, out any) {
+func readJSON(t testing.TB, path string, out any) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {

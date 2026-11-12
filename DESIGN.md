@@ -4,8 +4,9 @@ Status: implementation specification; Phase 0 evidence and reference tooling
 are recorded in [the Phase 0 report](docs/phase0.md). Phase 1's module,
 contracts, and bounded primitives are described in [README](README.md).
 Phase 2 implements bounded ORF metadata, layout plans, JPEG extraction, and
-the diagnostic CLI. Pixel decoding (Phases 3-4) and rendering are not yet
-implemented; no raw capability or camera certification is advertised.
+the diagnostic CLI. Phase 3 implements the evidenced word16le-high12 sensor
+decoder with exact sample parity. Predictive decoding (Phase 4), rendering,
+M1 release hardening and camera certification remain later gates.
 
 ## 1. Objective
 
@@ -213,7 +214,8 @@ Define `RawImage` with these semantics:
 - `Width`, `Height`: meaningful decoded sensor-plane dimensions.
 - `Stride`: measured in samples; initially exactly `Width`.
 - `ActiveArea image.Rectangle`: valid active crop in sensor coordinates,
-  using Go's half-open rectangle convention.
+  using Go's half-open rectangle convention. Empty means unavailable, with
+  a diagnostic; do not guess that the whole decoded plane is an active crop.
 - `CFA`: a 2x2 pattern anchored at raw coordinate `(0, 0)`. Preserve separate
   green positions for calibration even though both render as green.
 - `BitDepth`: nominal valid sample depth, separate from the storage word size.
@@ -658,8 +660,9 @@ bytes; metadata-only unsupported ORFs never claim RAW capability.
 [README](README.md) for executable gates and the exact supported parsing
 surface. Only evidenced `IIRO` framing and the old `OLYMP` / new little-endian
 `OLYMPUS` MakerNotes are parsed. `IIRS` and `MMOR` report unsupported;
-ordinary TIFF is not ORF. Layout IDs describe validated future decoder plans,
-not available raw decoders. JPEG selection inspects bounded frame headers and
+ordinary TIFF is not ORF. Layout IDs identify validated plans independently
+of decoder availability; Phase 3 enables only the word plan. JPEG selection
+inspects bounded frame headers and
 terminal markers without decoding entropy/pixels; extraction returns exact
 embedded bytes. Unverified Olympus preview orientation remains unavailable.
 
@@ -677,6 +680,15 @@ embedded bytes. Unverified Olympus preview orientation remains unavailable.
 **Gate:** exact parity for every required fixture in these layouts; synthetic
 edge vectors pass; truncated/invalid payloads fail explicitly; unsupported
 strip organizations are rejected rather than concatenated speculatively.
+
+**Implementation status:** complete. The only initially evidenced word/packed
+layout is `olympus-word16le-high12`; no unevidenced packed decoder was invented.
+Every E-1/E-400 golden sensor sample matches (15,859,904 total). Word RAW
+capabilities reflect implementation and working limits; predictive capabilities
+remain unavailable. One output plane, one row and caller-owned diagnostics are
+allocated, with cancellation/error/ownership and exact quota tests. See
+[README](README.md) for executable gates, repeated review results, performance
+baselines and the distinction between layout parity and camera certification.
 
 ### Phase 4: legacy predictive compressed ORF
 
